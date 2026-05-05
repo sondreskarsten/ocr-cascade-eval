@@ -1,0 +1,53 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    id: hf
+    waitFor: ['-']
+    args: ['build', '-t', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-hf:latest',
+           '-f', 'images/huggingface/Dockerfile', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: paddle
+    waitFor: ['-']
+    args: ['build', '-t', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-paddle:latest',
+           '-f', 'images/paddle/Dockerfile', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: table
+    waitFor: ['-']
+    args: ['build', '-t', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-table:latest',
+           '-f', 'images/table/Dockerfile', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: xbrl
+    waitFor: ['-']
+    args: ['build', '-t', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-xbrl:latest',
+           '-f', 'images/xbrl/Dockerfile', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: llm
+    waitFor: ['-']
+    args: ['build', '-t', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-llm:latest',
+           '-f', 'images/llm/Dockerfile', '.']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-hf
+    waitFor: ['hf']
+    args: ['push', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-hf:latest']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-paddle
+    waitFor: ['paddle']
+    args: ['push', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-paddle:latest']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-table
+    waitFor: ['table']
+    args: ['push', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-table:latest']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-xbrl
+    waitFor: ['xbrl']
+    args: ['push', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-xbrl:latest']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-llm
+    waitFor: ['llm']
+    args: ['push', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/ocr-eval-llm:latest']
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: 100
+
+timeout: '3600s'

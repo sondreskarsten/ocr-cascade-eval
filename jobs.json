@@ -1,0 +1,40 @@
+{
+  "common": {
+    "project": "sondreskarsten-d7d14",
+    "region": "europe-north1",
+    "service_account": "s1sfreracct@sondreskarsten-d7d14.iam.gserviceaccount.com",
+    "registry_prefix": "europe-north1-docker.pkg.dev/sondreskarsten-d7d14/brreg-pipelines"
+  },
+  "jobs": [
+    {"name": "ocr-eval-paddleocr", "image": "ocr-eval-paddle", "script": "models/paddleocr.py", "memory": "16Gi", "cpu": "4", "timeout": "3600s"},
+    {"name": "ocr-eval-tesseract", "image": "ocr-eval-table", "script": "models/tesseract.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-camelot", "image": "ocr-eval-table", "script": "models/camelot.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-tabula", "image": "ocr-eval-table", "script": "models/tabula.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-ocrmypdf", "image": "ocr-eval-table", "script": "models/ocrmypdf.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-donut", "image": "ocr-eval-hf", "script": "models/donut.py", "memory": "16Gi", "cpu": "4", "timeout": "3600s"},
+    {"name": "ocr-eval-layoutlmv3", "image": "ocr-eval-hf", "script": "models/layoutlmv3.py", "memory": "16Gi", "cpu": "4", "timeout": "1800s"},
+    {"name": "ocr-eval-udop", "image": "ocr-eval-hf", "script": "models/udop.py", "memory": "16Gi", "cpu": "4", "timeout": "3600s"},
+    {"name": "ocr-eval-lilt", "image": "ocr-eval-hf", "script": "models/lilt.py", "memory": "16Gi", "cpu": "4", "timeout": "1800s"},
+    {"name": "ocr-eval-bge-m3", "image": "ocr-eval-hf", "script": "models/bge_m3.py", "memory": "16Gi", "cpu": "4", "timeout": "1800s"},
+    {"name": "ocr-eval-multilingual-e5", "image": "ocr-eval-hf", "script": "models/multilingual_e5.py", "memory": "16Gi", "cpu": "4", "timeout": "1800s"},
+    {"name": "ocr-eval-nb-sbert", "image": "ocr-eval-hf", "script": "models/nb_sbert.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-bge-reranker", "image": "ocr-eval-hf", "script": "models/bge_reranker_v2.py", "memory": "16Gi", "cpu": "4", "timeout": "1800s"},
+    {"name": "ocr-eval-finbert-prosus", "image": "ocr-eval-hf", "script": "models/finbert_prosus.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-finbert-hkust", "image": "ocr-eval-hf", "script": "models/finbert_hkust.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-finbert2", "image": "ocr-eval-hf", "script": "models/finbert2.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-fingpt", "image": "ocr-eval-hf", "script": "models/fingpt.py", "memory": "32Gi", "cpu": "8", "timeout": "5400s"},
+    {"name": "ocr-eval-finma", "image": "ocr-eval-hf", "script": "models/finma.py", "memory": "32Gi", "cpu": "8", "timeout": "5400s"},
+    {"name": "ocr-eval-byt5", "image": "ocr-eval-hf", "script": "models/byt5.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-gliner", "image": "ocr-eval-hf", "script": "models/gliner.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-gliner2", "image": "ocr-eval-hf", "script": "models/gliner2.py", "memory": "16Gi", "cpu": "4", "timeout": "1800s"},
+    {"name": "ocr-eval-gliclass", "image": "ocr-eval-hf", "script": "models/gliclass.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-setfit", "image": "ocr-eval-hf", "script": "models/setfit.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-tapas", "image": "ocr-eval-hf", "script": "models/tapas.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-tapex", "image": "ocr-eval-hf", "script": "models/tapex.py", "memory": "8Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-omnitab", "image": "ocr-eval-hf", "script": "models/omnitab.py", "memory": "16Gi", "cpu": "4", "timeout": "1800s"},
+    {"name": "ocr-eval-normistral-11b", "image": "ocr-eval-llm", "script": "models/normistral_11b.py", "memory": "16Gi", "cpu": "8", "timeout": "5400s"},
+    {"name": "ocr-eval-norwai-magistral-24b", "image": "ocr-eval-llm", "script": "models/norwai_magistral_24b.py", "memory": "32Gi", "cpu": "8", "timeout": "7200s"},
+    {"name": "ocr-eval-arelle", "image": "ocr-eval-xbrl", "script": "models/arelle.py", "memory": "4Gi", "cpu": "2", "timeout": "1800s"},
+    {"name": "ocr-eval-pyesef", "image": "ocr-eval-xbrl", "script": "models/pyesef.py", "memory": "4Gi", "cpu": "2", "timeout": "1800s"}
+  ]
+}
