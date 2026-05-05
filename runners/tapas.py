@@ -1,40 +1,37 @@
-from shared import for_each_pdf, run_with_metrics
-import pandas as pd
-
-
-def _extract_first_table(pdf_path):
-    import camelot
-    try:
-        tables = camelot.read_pdf(pdf_path, pages="all", flavor="stream")
-        for t in tables:
-            df = t.df
-            if df.shape[0] >= 3 and df.shape[1] >= 2:
-                return df.astype(str)
-    except Exception:
-        pass
-    return None
+from shared import for_each_pdf, run_with_metrics, fetch_fixture
 
 
 def main():
+    fx = fetch_fixture()
+    import pandas as pd
     from transformers import pipeline
+
+    df = pd.read_csv(fx["table.csv"]).astype(str)
     pipe = pipeline("table-question-answering", model="google/tapas-base-finetuned-wtq")
-    questions = ["What is årsresultat?", "Sum kostnader?", "Driftsresultat?"]
+
+    questions = [
+        "What is the value of Årsresultat in 2024?",
+        "How much was Skattekostnad in 2023?",
+        "What is the value of Sum kostnader in 2024?",
+        "What is Driftsresultat in 2023?",
+    ]
+    answers = []
+    for q in questions:
+        try:
+            a = pipe(table=df, query=q)
+            answers.append({"q": q, "a": {k: str(v) for k, v in a.items()}})
+        except Exception as e:
+            answers.append({"q": q, "error": f"{type(e).__name__}: {e}"})
 
     def per_pdf(pdf_id, b):
-        df = _extract_first_table(b["pdf_ocr"])
-        if df is None:
-            return {"status": "no_table_extracted"}
-        answers = []
-        for q in questions:
-            try:
-                a = pipe(table=df, query=q)
-                answers.append({"q": q, "answer": str(a.get("answer", a))})
-            except Exception as e:
-                answers.append({"q": q, "error": f"{type(e).__name__}: {e}"})
-        return {"table_shape": list(df.shape), "table_first_row": df.iloc[0].tolist(),
-                "questions_and_answers": answers}
+        return {"note": "TaPas reads from static fixture table.csv (same for both PDFs)",
+                "table_chars": len(b["full_text"]) if b.get("full_text") else 0}
 
-    return {"checkpoint": "google/tapas-base-finetuned-wtq", "per_pdf": for_each_pdf(per_pdf)}
+    return {"checkpoint": "google/tapas-base-finetuned-wtq",
+            "table_columns": list(df.columns),
+            "table_n_rows": len(df),
+            "questions_and_answers": answers,
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":
