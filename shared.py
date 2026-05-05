@@ -45,7 +45,7 @@ def fetch_pdfs():
             key=lambda p: int(Path(p).stem.split("-")[1].split("_")[0])
         )
         pdf_path = fx.get(f"{pdf_id}.pdf") or fx.get(f"pdfs/{pdf_id}.pdf")
-        ocr_path = fx.get(f"{pdf_id}_ocr.pdf") or fx.get(f"ocr_pdfs/{pdf_id}_ocr.pdf")
+        ocr_path = fx.get(f"{pdf_id}_ocr.pdf") or fx.get(f"ocr_pdfs/{pdf_id}_ocr.pdf") or fx.get(f"pdfs_ocr/{pdf_id}.pdf")
         bundles[pdf_id] = {
             "pdf": pdf_path,
             "pdf_ocr": ocr_path,
