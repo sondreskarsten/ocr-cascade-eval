@@ -111,3 +111,38 @@ For the next iteration of the ensemble runner, add:
 4. **Vote threshold = 4/8** (was 4/6) — re-run the audit, see if any disagreements remain.
 
 Fine-tuning paths (A/B/C above) are bigger investments to defer until the baseline ensemble is stable on 12k.
+
+## Update: diacritic-stripping is fully recoverable via normalization
+
+Empirical test on 1,000-PDF noter vocabulary (9,851 unique alpha tokens ≥4 chars):
+
+- Stripping `æ→a, ø→o, å→a` produces **27 truly ambiguous tokens out of 9,851 = 0.27%**
+- Of those 27, only 6-8 are real homograph risks (`vare`/`være`/`våre`, `mote`/`møte`, etc.)
+- **Zero ambiguity in financial vocabulary**: every nøkkeltall label, balanse term, and note title normalizes losslessly
+
+### Empirical impact on cascade voting (v2 fixture, gemini truth)
+
+| engine | exact-match recall | full-normalize recall | gain |
+|---|---:|---:|---:|
+| doctr (noter titles) | 52% | **67%** | +15 pp |
+| doctr (nøkkeltall labels) | 42% | **67%** | +25 pp — matches top engines |
+| nougat (titles) | 44% | 52% | +8 pp |
+| nougat (labels) | 29% | 45% | +16 pp |
+| tesseract / paddleocr / ocrmypdf | 87-89% titles | 87-89% titles | nil — already at ceiling |
+
+### Implication
+
+doctr should be in the cascade for label-matching tasks with `normalize_full()` applied to BOTH the OCR output and the canonical labels at compare time. Same for nougat. Don't strip diacritics from the stored OCR text — keep the raw output, and apply the normalization at the comparator. That preserves the diacritic-rich engines (tesseract / paddleocr / ocrmypdf) for downstream noter prose use while letting doctr contribute votes for labels and numbers.
+
+Concretely:
+```python
+DIA = {'æ':'a','ø':'o','å':'a','Æ':'A','Ø':'O','Å':'A'}
+def normalize(s):
+    return ''.join(DIA.get(c, c) for c in (s or '')).lower()
+
+# In cascade voting, compare normalized forms:
+def label_present(label, text):
+    return normalize(label) in normalize(text)
+```
+
+For noter prose extraction (separate from voting), tesseract/ocrmypdf remain primary because they preserve diacritics natively. doctr is a secondary signal for label/number recall, not for free-text reading.
