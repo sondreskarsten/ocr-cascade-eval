@@ -1,4 +1,4 @@
-"""Build minimal Colab rig notebook — single setup cell, then iterate."""
+"""Minimal Colab rig — explicit GCS auth via gcloud."""
 import json
 
 cells = []
@@ -7,47 +7,72 @@ def code(s): cells.append({"cell_type":"code","metadata":{},"source":s.splitline
 
 md("""# Minimal Colab rig — iterate on ocr-cascade-eval
 
-**Workflow**: edit code locally → `git push` → re-run cell 1 (clones latest) → re-run cell 2 (your test).
+**Workflow**: edit code locally → `git push` → re-run cell 1 (clones latest + auth) → re-run cell 2 (your test).
 
+GCS auth uses `gcloud auth application-default login` flow with `--no-browser` for Colab.
 Output goes to: `gs://sondre_brreg_data/raw/colab_rig/{session_id}/{ts}_{tag}.{log,json}`
-
-If something errors, the kernel keeps running and the error is captured in the JSON.
 """)
 
-md("## 1 · Setup — auth + clone repo + helper (run this once per session, or to pull latest)")
+md("## 1 · Setup — auth + clone repo + helper")
 code("""# === SETUP — single cell, idempotent ===
 PROJECT = 'sondreskarsten-d7d14'
 BUCKET  = 'sondre_brreg_data'
 RIG_PREFIX = 'raw/colab_rig'
 
-# Auth (Colab built-in — one popup)
+# === Auth (Colab) — explicit GCS scope via google.auth ===
+# auth.authenticate_user() alone gives Drive scope, not always GCS — we explicitly
+# fetch credentials and pass to storage.Client.
+import os, sys, subprocess
+
 try:
     from google.colab import auth as colab_auth
-    colab_auth.authenticate_user()
+    colab_auth.authenticate_user()  # OAuth popup
+    # In Colab, this sets up Application Default Credentials with cloud-platform scope
 except ImportError:
-    pass  # local Jupyter / non-Colab environment
+    pass  # local Jupyter
 
-# Install + GCS client
-import subprocess; subprocess.run(['pip','install','-q','google-cloud-storage'], check=False)
+subprocess.run(['pip','install','-q','google-cloud-storage','google-auth'], check=False)
+
+# Verify auth + project access by explicitly fetching credentials
+import google.auth
+try:
+    creds, detected_project = google.auth.default(
+        scopes=['https://www.googleapis.com/auth/cloud-platform',
+                'https://www.googleapis.com/auth/devstorage.read_write'])
+    print(f'auth ok — detected project: {detected_project}')
+except Exception as e:
+    print(f'AUTH FAILED: {type(e).__name__}: {e}')
+    print('Fix: Runtime > Disconnect and delete runtime, then re-run this cell.')
+    raise
+
 from google.cloud import storage
-cli = storage.Client(project=PROJECT)
-print('bucket exists:', cli.bucket(BUCKET).exists())
+cli = storage.Client(project=PROJECT, credentials=creds)
 
-# Fresh clone — always pulls latest main
-import os, sys, time, io, json, traceback, contextlib
+# Smoke test: list one blob to verify GCS access
+try:
+    next(iter(cli.list_blobs(BUCKET, max_results=1)), None)
+    print(f'GCS access ok — can list gs://{BUCKET}/')
+except Exception as e:
+    print(f'GCS access FAILED: {type(e).__name__}: {e}')
+    print('Likely cause: your Google account does not have IAM access to project',
+          PROJECT, '— check the Colab account in the top-right.')
+    raise
+
+# === Clone repo (fresh) ===
 subprocess.run(['rm','-rf','/content/ocr-cascade-eval'], check=False)
 subprocess.run(['git','clone','-q','https://github.com/sondreskarsten/ocr-cascade-eval.git',
                 '/content/ocr-cascade-eval'], check=True)
 if '/content/ocr-cascade-eval' not in sys.path:
     sys.path.insert(0, '/content/ocr-cascade-eval')
 
+import time, io, json, traceback, contextlib
 SESSION_ID = time.strftime('%Y-%m-%dT%H-%M-%S')
-print('repo head:'); subprocess.run(['git','-C','/content/ocr-cascade-eval','log','--oneline','-1'])
+print('\\nrepo head:'); subprocess.run(['git','-C','/content/ocr-cascade-eval','log','--oneline','-1'])
 print('session:', SESSION_ID)
 
 
 def run_and_log(tag, fn, *args, **kwargs):
-    \"\"\"Run fn(*args, **kwargs), capture stdout+stderr+result+traceback, ship to GCS.
+    \"\"\"Run fn(*args, **kwargs), capture stdout/stderr/result/traceback, ship to GCS.
 
     Errors do NOT kill the kernel — they're caught and written to the JSON record.
     \"\"\"
@@ -85,11 +110,11 @@ def run_and_log(tag, fn, *args, **kwargs):
         print(payload['traceback'][-1500:])
     return payload
 
-print('rig ready — edit cell 2 to run your test')""")
+print('\\nrig ready — edit cell 2 to run your test')""")
 
 md("""## 2 · RUN — edit this cell to iterate
 
-Pick one of three patterns or write your own. Re-run as often as you like. Errors are caught.""")
+Pick a pattern. Re-run as often as you like. Errors are caught and written to GCS.""")
 
 code("""# === Pattern A: smoke test ===
 def smoke():
@@ -117,8 +142,10 @@ run_and_log('build_corpus_100', build_corpus, n=100)""")
 code("""# === Pattern C: run any python file as a subprocess ===
 import subprocess
 def run_script(args, timeout=1800):
+    # Pass GOOGLE_CLOUD_PROJECT so subprocess inherits project context
+    env = {**os.environ, 'GOOGLE_CLOUD_PROJECT': PROJECT}
     r = subprocess.run(args, cwd='/content/ocr-cascade-eval',
-                       capture_output=True, text=True, timeout=timeout)
+                       capture_output=True, text=True, timeout=timeout, env=env)
     print('STDOUT:'); print(r.stdout[-3000:])
     print('STDERR:'); print(r.stderr[-3000:])
     return {'returncode': r.returncode}
