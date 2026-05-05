@@ -24,17 +24,20 @@ def _tesseract_tsv_per_page(img_path, lang="nor"):
         try: conf = float(data["conf"][i])
         except: conf = -1
         if conf < 30: continue
-        line_id = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
-        by_line.setdefault(line_id, []).append({
+        top = int(data["top"][i])
+        height = int(data["height"][i])
+        cy = top + height // 2
+        row_id = int(round(cy / 15))
+        by_line.setdefault(row_id, []).append({
             "text": w,
             "left": int(data["left"][i]),
-            "top": int(data["top"][i]),
+            "top": top,
             "right": int(data["left"][i]) + int(data["width"][i]),
             "conf": conf,
         })
 
     found = []
-    for line_id, tokens in by_line.items():
+    for row_id, tokens in by_line.items():
         tokens.sort(key=lambda t: t["left"])
         i = 0
         while i < len(tokens):
