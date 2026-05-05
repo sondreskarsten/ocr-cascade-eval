@@ -148,7 +148,7 @@
       "image": "ocr-eval-hf",
       "memory": "32Gi",
       "cpu": "8",
-      "timeout": "5400s"
+      "timeout": "3600s"
     },
     {
       "name": "ocr-eval-finma",
@@ -156,14 +156,14 @@
       "image": "ocr-eval-hf",
       "memory": "32Gi",
       "cpu": "8",
-      "timeout": "5400s"
+      "timeout": "3600s"
     },
     {
       "name": "ocr-eval-finpythia",
       "runner": "finpythia",
       "image": "ocr-eval-hf",
-      "memory": "16Gi",
-      "cpu": "4",
+      "memory": "32Gi",
+      "cpu": "8",
       "timeout": "3600s"
     },
     {
@@ -452,7 +452,7 @@
       "image": "ocr-eval-hf",
       "memory": "16Gi",
       "cpu": "4",
-      "timeout": "1800s"
+      "timeout": "3600s"
     },
     {
       "name": "ocr-eval-pixtral",

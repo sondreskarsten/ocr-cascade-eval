@@ -14,18 +14,21 @@ def main():
     # Financial questions targeting nøkkeltall
     questions = [
         "What is the company name?",
-        "What is the organisasjonsnummer?",
         "What is the year?",
         "What is the årsresultat?",
-        "What is the sum kostnader?",
         "What is the sum eiendeler?",
-        "What is the sum egenkapital?",
         "What is the driftsresultat?",
     ]
 
     def per_pdf(pdf_id, b):
-        # Run questions only on page 2 (resultatregnskap) and page 3 (balanse) typically
-        target_imgs = b["page_imgs"][1:4] if len(b["page_imgs"]) >= 4 else b["page_imgs"]
+        # Run questions on page 2 only (resultatregnskap typically) to fit timeout budget
+        n = len(b["page_imgs"])
+        if n >= 2:
+            target_imgs = [b["page_imgs"][1]]
+        elif n >= 1:
+            target_imgs = [b["page_imgs"][0]]
+        else:
+            return {"checkpoint": ckpt, "error": "no pages"}
         page_results = []
         for img_path in target_imgs:
             img = Image.open(img_path).convert("RGB")

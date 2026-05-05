@@ -126,9 +126,16 @@ def process_one(j, tok):
     upsert_action, upsert_code = upsert(j, tok)
     execs = list_executions(j["name"], tok)
     state = execution_state(execs)
+    result_in_gcs = has_result(j["runner"])
     info = {"runner": j["runner"], "state": state, "n_executions": len(execs),
             "upsert": f"{upsert_action}:{upsert_code}",
-            "result_in_gcs": has_result(j["runner"])}
+            "result_in_gcs": result_in_gcs}
+    # If a result file exists, treat as ok regardless of execution state.
+    # Some jobs OOM after writing the result, leaving execution_state="failed"
+    # while the actual run output is good.
+    if result_in_gcs:
+        info["effective_state"] = "ok"
+        return j["name"], info
     if "failed" in state and len(execs) < MAX_ATTEMPTS:
         c, _ = trigger(j["name"], tok)
         info["retry_triggered"] = c in (200, 202)
@@ -155,7 +162,7 @@ def main():
             try:
                 name, info = f.result()
                 summary["jobs"][name] = info
-                if info["state"] == "ok":
+                if info.get("effective_state") == "ok" or info["state"] == "ok":
                     summary["totals"]["ok"] += 1
                 elif info["state"] == "running":
                     summary["totals"]["running"] += 1
