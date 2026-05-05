@@ -1,8 +1,9 @@
-from shared import for_each_pdf, run_with_metrics
+from shared import fetch_fixture, run_with_metrics
 
 
 def main():
-    import os
+    fx = fetch_fixture()
+    import json, os
     from llama_cpp import Llama
     from huggingface_hub import hf_hub_download
 
@@ -11,32 +12,43 @@ def main():
         ("norallm/normistral-11b-warm", "normistral-11b-warm.Q4_K_M.gguf"),
         ("norallm/normistral-11b-warm", "normistral-11b-warm.Q3_K_M.gguf"),
     ]
-    gguf, log, chosen = None, [], None
+    gguf_path, log = None, []
+    chosen = None
     for r, fn in candidates:
         try:
-            gguf = hf_hub_download(repo_id=r, filename=fn); chosen = (r, fn); break
+            gguf_path = hf_hub_download(repo_id=r, filename=fn)
+            chosen = (r, fn)
+            break
         except Exception as e:
-            log.append({f"{r}/{fn}": f"{type(e).__name__}: {e}"})
-    if gguf is None:
+            log.append({f"{r}/{fn}": f"{type(e).__name__}: {str(e)[:120]}"})
+
+    if gguf_path is None:
         return {"status": "error", "lookup_log": log}
 
-    llm = Llama(model_path=gguf, n_ctx=4096, n_threads=os.cpu_count(), verbose=False)
+    try:
+        # n_ctx kept modest, no chat_format (avoids Jinja2 template parsing issues)
+        llm = Llama(model_path=gguf_path, n_ctx=2048, n_threads=os.cpu_count(),
+                    verbose=False, chat_format=None)
+    except Exception as e:
+        return {"status": "error", "lookup_log": log,
+                "load_error": f"{type(e).__name__}: {str(e)[:300]}",
+                "chosen_repo": chosen[0], "chosen_file": chosen[1]}
 
-    def per_pdf(pdf_id, b):
-        excerpt = b["full_text"][:2500]
-        prompts = [
-            f"Her er et utdrag fra et norsk regnskap:\n\n{excerpt}\n\nHva er selskapets navn?\nSvar:",
-            f"Her er et utdrag fra et norsk regnskap:\n\n{excerpt}\n\nHva er årsresultatet?\nSvar:",
-            f"Her er et utdrag fra et norsk regnskap:\n\n{excerpt}\n\nList opp tre hovedpunkter fra resultatregnskapet.\nSvar:",
-        ]
-        comps = []
-        for p in prompts:
-            out = llm(p, max_tokens=200, temperature=0.0, stop=["\n\n\n"])
-            comps.append({"prompt_tail": p[-200:], "completion": out["choices"][0]["text"]})
-        return {"prompts_run": len(comps), "completions": comps}
-
-    return {"checkpoint_repo": chosen[0], "checkpoint_file": chosen[1],
-            "lookup_log": log, "per_pdf": for_each_pdf(per_pdf)}
+    # Plain text prompts, no special tokens
+    prompts = [
+        "Spørsmål: Hva betyr 'utsatt skatt' i norsk regnskap? Svar:",
+        "Spørsmål: Hva er forskjellen mellom 'betalbar skatt' og 'skattekostnad'? Svar:",
+    ]
+    completions = []
+    for p in prompts:
+        try:
+            out = llm(p, max_tokens=180, temperature=0.0,
+                      stop=["\n\n", "Spørsmål:"])
+            completions.append({"prompt": p, "completion": out["choices"][0]["text"]})
+        except Exception as e:
+            completions.append({"prompt": p, "error": f"{type(e).__name__}: {e}"})
+    return {"chosen_repo": chosen[0], "chosen_file": chosen[1],
+            "lookup_log": log, "completions": completions}
 
 
 if __name__ == "__main__":

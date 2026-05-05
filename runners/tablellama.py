@@ -13,8 +13,10 @@ def main():
         ("LoneStriker/TableLlama-GGUF", "TableLlama-Q4_K_M.gguf"),
         ("brittlewis12/TableLlama-GGUF", "tablellama.Q4_K_M.gguf"),
         ("nold/TableLlama-GGUF", "TableLlama.Q4_K_M.gguf"),
+        ("RichardErkhov/osunlp_-_TableLlama-gguf", "TableLlama.Q4_K_M.gguf"),
     ]
     gguf_path, log = None, []
+    chosen = None
     for r, fn in candidates:
         try:
             gguf_path = hf_hub_download(repo_id=r, filename=fn)
@@ -23,8 +25,11 @@ def main():
         except Exception as e:
             log.append({f"{r}/{fn}": f"{type(e).__name__}: {str(e)[:120]}"})
     if gguf_path is None:
-        return {"status": "error", "intended": "osunlp/TableLlama (Llama-2-13B base)",
-                "lookup_log": log}
+        # No public GGUF exists. Document as expected.
+        return {"status": "no_public_checkpoint",
+                "intended": "osunlp/TableLlama (Llama-2-13B base, Llama-2 license)",
+                "lookup_log": log,
+                "note": "No public GGUF conversion of osunlp/TableLlama exists due to Llama-2 license restrictions"}
 
     from llama_cpp import Llama
     llm = Llama(model_path=gguf_path, n_ctx=2048, n_threads=os.cpu_count(), verbose=False)

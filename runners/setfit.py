@@ -2,39 +2,57 @@ from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    from datasets import Dataset
     from setfit import SetFitModel, Trainer, TrainingArguments
+    from datasets import Dataset
 
     train_examples = [
-        {"text": "Skattekostnad", "label": 0},
-        {"text": "Betalbar skatt", "label": 0},
-        {"text": "Utsatt skatt", "label": 0},
-        {"text": "Endring utsatt skatt", "label": 0},
-        {"text": "Sum driftsinntekter", "label": 1},
-        {"text": "Annen driftsinntekt", "label": 1},
-        {"text": "Salgsinntekter", "label": 1},
-        {"text": "Driftsinntekter", "label": 1},
+        # revenue / inntekter
+        ("Salgsinntekt", "revenue"), ("Sum inntekter", "revenue"),
+        ("Annen driftsinntekt", "revenue"), ("Driftsinntekter", "revenue"),
+        ("Andre inntekter", "revenue"), ("Sum driftsinntekter", "revenue"),
+        # cost / kostnader
+        ("Sum kostnader", "cost"), ("Annen driftskostnad", "cost"),
+        ("Lønnskostnad", "cost"), ("Avskrivninger", "cost"),
+        ("Varekostnad", "cost"), ("Sum driftskostnad", "cost"),
+        # equity / egenkapital
+        ("Sum egenkapital", "equity"), ("Aksjekapital", "equity"),
+        ("Opptjent egenkapital", "equity"), ("Innskutt egenkapital", "equity"),
+        ("Annen egenkapital", "equity"), ("Egenkapital 31.12", "equity"),
+        # debt / gjeld
+        ("Sum gjeld", "debt"), ("Langsiktig gjeld", "debt"),
+        ("Kortsiktig gjeld", "debt"), ("Leverandørgjeld", "debt"),
+        ("Skyldig offentlig avgift", "debt"), ("Annen kortsiktig gjeld", "debt"),
+        # metadata / non-financial line
+        ("Brønnøysundregistrene", "meta"), ("Organisasjonsnummer", "meta"),
+        ("Foretaksnavn", "meta"), ("Forretningsadresse", "meta"),
+        ("Journalnummer", "meta"), ("Aksjeselskap", "meta"),
     ]
-    train_ds = Dataset.from_list(train_examples)
-    model = SetFitModel.from_pretrained("NbAiLab/nb-sbert-base", labels=["tax", "revenue"])
-    args = TrainingArguments(num_epochs=1, batch_size=4, num_iterations=10)
-    trainer = Trainer(model=model, args=args, train_dataset=train_ds, eval_dataset=train_ds,
-                      column_mapping={"text": "text", "label": "label"})
+    texts, labels = zip(*train_examples)
+    train_ds = Dataset.from_dict({"text": list(texts), "label": list(labels)})
+
+    model = SetFitModel.from_pretrained("NbAiLab/nb-sbert-base")
+    args = TrainingArguments(num_epochs=1, batch_size=8)
+    trainer = Trainer(model=model, args=args, train_dataset=train_ds)
     trainer.train()
 
     def per_pdf(pdf_id, b):
-        lines = []
+        seen = []
         for ln in b["full_text"].splitlines():
             ln = ln.strip()
-            if 4 <= len(ln) <= 50 and ln[0:1].isalpha() and ln not in lines: lines.append(ln)
-            if len(lines) >= 20: break
-        if not lines:
-            return {"n_inputs": 0}
-        preds = model.predict(lines)
-        results = [{"line": ln, "pred": p} for ln, p in zip(lines, list(preds))]
-        return {"n_inputs": len(lines), "predictions": results}
+            if 4 <= len(ln) <= 60 and not ln.replace(" ","").isdigit():
+                if ln not in seen: seen.append(ln)
+            if len(seen) >= 25: break
+        if not seen: return {"n_inputs": 0, "predictions": []}
+        preds = model.predict(seen)
+        out = [{"line": s, "pred": str(p)} for s, p in zip(seen, preds)]
+        # Distribution
+        from collections import Counter
+        dist = Counter(p["pred"] for p in out)
+        return {"n_inputs": len(seen), "predictions": out, "label_distribution": dict(dist)}
 
-    return {"backbone": "NbAiLab/nb-sbert-base", "n_train_examples": len(train_examples),
+    return {"backbone": "NbAiLab/nb-sbert-base",
+            "n_train_examples": len(train_examples),
+            "labels": sorted(set(labels)),
             "per_pdf": for_each_pdf(per_pdf)}
 
 

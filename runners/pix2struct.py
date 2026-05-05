@@ -6,27 +6,42 @@ def main():
     from PIL import Image
     from transformers import Pix2StructProcessor, Pix2StructForConditionalGeneration
 
-    ckpt = "google/pix2struct-base"
+    ckpt = "google/pix2struct-docvqa-base"
     proc = Pix2StructProcessor.from_pretrained(ckpt)
     model = Pix2StructForConditionalGeneration.from_pretrained(ckpt)
     model.eval()
 
+    # Financial questions targeting nøkkeltall
+    questions = [
+        "What is the company name?",
+        "What is the organisasjonsnummer?",
+        "What is the year?",
+        "What is the årsresultat?",
+        "What is the sum kostnader?",
+        "What is the sum eiendeler?",
+        "What is the sum egenkapital?",
+        "What is the driftsresultat?",
+    ]
+
     def per_pdf(pdf_id, b):
-        pages = []
-        for img_path in b["page_imgs"]:
+        # Run questions only on page 2 (resultatregnskap) and page 3 (balanse) typically
+        target_imgs = b["page_imgs"][1:4] if len(b["page_imgs"]) >= 4 else b["page_imgs"]
+        page_results = []
+        for img_path in target_imgs:
             img = Image.open(img_path).convert("RGB")
-            inputs = proc(images=img, return_tensors="pt", text="What is the main heading?")
-            try:
-                with torch.no_grad():
-                    out = model.generate(**inputs, max_new_tokens=64)
-                text = proc.decode(out[0], skip_special_tokens=True)
-                pages.append({"page_n": int(img_path.split("/")[-1].split("-")[1].split(".")[0]),
-                              "answer": text})
-            except Exception as e:
-                pages.append({"page_n": int(img_path.split("/")[-1].split("-")[1].split(".")[0]),
-                              "error": f"{type(e).__name__}: {e}"})
-        return {"n_pages": len(pages), "pages": pages,
-                "task": "VQA: 'What is the main heading?' per page"}
+            qa = []
+            for q in questions:
+                try:
+                    inputs = proc(images=img, return_tensors="pt", text=q)
+                    with torch.no_grad():
+                        out = model.generate(**inputs, max_new_tokens=48)
+                    a = proc.decode(out[0], skip_special_tokens=True)
+                    qa.append({"q": q, "a": a})
+                except Exception as e:
+                    qa.append({"q": q, "error": f"{type(e).__name__}: {e}"})
+            page_results.append({"img": img_path.split("/")[-1], "qa": qa})
+        return {"checkpoint": ckpt, "task": "DocVQA per-page",
+                "n_pages_queried": len(page_results), "pages": page_results}
 
     return {"checkpoint": ckpt, "per_pdf": for_each_pdf(per_pdf)}
 
