@@ -12,10 +12,16 @@ def main():
         try:
             r = conv.convert(b["pdf"])
             md = r.document.export_to_markdown()
-            return {"n_chars_markdown": len(md),
-                    "preview_head": md[:1500],
-                    "preview_mid": md[len(md)//2:len(md)//2+1500] if len(md) > 3000 else "",
-                    "preview_tail": md[-1500:] if len(md) > 1500 else ""}
+            if len(md) <= 50000:
+                # Store full markdown — small enough to audit fully
+                return {"n_chars_markdown": len(md), "markdown": md}
+            else:
+                # Large doc — store head/mid/tail samples
+                return {"n_chars_markdown": len(md),
+                        "preview_head": md[:1500],
+                        "preview_mid": md[len(md)//2:len(md)//2+1500],
+                        "preview_tail": md[-1500:],
+                        "truncated": True}
         except Exception as e:
             return {"error": f"{type(e).__name__}: {e}"}
 
