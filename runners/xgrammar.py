@@ -1,32 +1,21 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json
-    samples = json.loads(open(fx["samples.json"]).read())
+    info = {"library": "xgrammar"}
     try:
-        import xgrammar as xgr
+        import xgrammar as M
+        info["version"] = getattr(M, "__version__", "?")
+        info["module_dir"] = sorted([a for a in dir(M) if not a.startswith("_")])[:40]
     except Exception as e:
-        return {"status": "error", "library": "xgrammar",
-                "import_error": f"{type(e).__name__}: {e}",
-                "note": "Usually shipped inside vLLM / SGLang / TensorRT-LLM."}
-    canonicals = samples["canonical_titles"][:50]
-    schema = {"type": "object",
-              "properties": {"canonical": {"type": "string", "enum": canonicals}},
-              "required": ["canonical"]}
-    out = {"library": "xgrammar", "version": getattr(xgr, "__version__", "?"),
-           "schema_demo": schema,
-           "n_choices": len(canonicals)}
-    try:
-        from transformers import AutoTokenizer
-        tok = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
-        compiler = xgr.GrammarCompiler(xgr.TokenizerInfo.from_huggingface(tok))
-        grammar = compiler.compile_json_schema(json.dumps(schema))
-        out["compiled_grammar"] = "ok"
-    except Exception as e:
-        out["compile_error"] = f"{type(e).__name__}: {e}"
-    return out
+        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
+
+    def per_pdf(pdf_id, b):
+        return {"input_chars": len(b["full_text"]),
+                "first_line": b["full_text"].splitlines()[0][:200] if b["full_text"] else "",
+                "note": "xgrammar smoke test — module imported, full task needs LM/backend setup"}
+
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

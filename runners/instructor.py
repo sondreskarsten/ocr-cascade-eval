@@ -1,38 +1,21 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json
-    samples = json.loads(open(fx["samples.json"]).read())
-
     info = {"library": "instructor"}
     try:
-        import instructor
-        info["version"] = getattr(instructor, "__version__", "?")
+        import instructor as M
+        info["version"] = getattr(M, "__version__", "?")
+        info["module_dir"] = sorted([a for a in dir(M) if not a.startswith("_")])[:40]
     except Exception as e:
-        info["import_error"] = f"{type(e).__name__}: {e}"
-        return info
+        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
 
-    from typing import Literal
-    from pydantic import BaseModel
+    def per_pdf(pdf_id, b):
+        return {"input_chars": len(b["full_text"]),
+                "first_line": b["full_text"].splitlines()[0][:200] if b["full_text"] else "",
+                "note": "instructor smoke test — module imported, full task needs LM/backend setup"}
 
-    canonicals = samples["canonical_titles"][:30]
-    LiteralType = Literal[tuple(canonicals)]
-
-    class Mapping(BaseModel):
-        label: str
-        canonical: LiteralType
-        confidence: float
-
-    info["pydantic_schema"] = Mapping.model_json_schema()
-    info["constraint_demo"] = {
-        "input_label": samples["norwegian_label"],
-        "constrained_to": canonicals,
-        "n_choices": len(canonicals),
-        "note": "instructor wraps an LLM client (OpenAI/Anthropic/Gemini). No API key in this run; smoke test only."
-    }
-    return info
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

@@ -1,25 +1,37 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics, fetch_fixture
+import json
 
 
 def main():
     fx = fetch_fixture()
-    import json
     samples = json.loads(open(fx["samples.json"]).read())
-    info = {"checkpoint": "intfloat/e5-mistral-7b-instruct", "size_gb": 14}
-    try:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer(info["checkpoint"])
-    except Exception as e:
-        info["error"] = f"{type(e).__name__}: {e}"
-        return info
-    queries = [item["q"] for item in samples["queries"][:10]]
-    cands = samples["canonical_titles"][:50]
-    qe = model.encode(queries, normalize_embeddings=True)
-    ce = model.encode(cands, normalize_embeddings=True)
-    s = qe @ ce.T
-    info["sample_top1"] = [(queries[i], cands[int(s[i].argmax())], float(s[i].max()))
-                            for i in range(len(queries))]
-    return info
+    canonical = samples["canonical_titles"]
+    from sentence_transformers import SentenceTransformer
+    model = SentenceTransformer("intfloat/e5-mistral-7b-instruct")
+    cand_emb = model.encode(canonical, normalize_embeddings=True, batch_size=8)
+
+    def per_pdf(pdf_id, b):
+        lines = [ln.strip() for ln in b["full_text"].splitlines()
+                 if 3 <= len(ln.strip()) <= 80 and not ln.strip().replace(" ","").isdigit()]
+        seen = []
+        for ln in lines:
+            if ln not in seen: seen.append(ln)
+            if len(seen) >= 50: break
+        if not seen:
+            return {"n_extracted": 0, "matches": []}
+        emb = model.encode(seen, normalize_embeddings=True, batch_size=8)
+        scores = emb @ cand_emb.T
+        matches = []
+        for i, ln in enumerate(seen):
+            j = int(scores[i].argmax())
+            matches.append({"line": ln, "best_canonical": canonical[j], "score": float(scores[i][j])})
+        matches.sort(key=lambda x: -x["score"])
+        return {"n_extracted": len(seen),
+                "avg_top1_score": round(sum(m["score"] for m in matches)/len(matches), 3),
+                "top10": matches[:10], "bottom5": matches[-5:]}
+
+    return {"checkpoint": "intfloat/e5-mistral-7b-instruct", "n_canonicals": len(canonical),
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

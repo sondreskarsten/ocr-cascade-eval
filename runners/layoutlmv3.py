@@ -1,14 +1,13 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
-def _normalize_box(box, w, h):
+def _norm(box, w, h):
     return [int(1000 * box[0] / w), int(1000 * box[1] / h),
             int(1000 * box[2] / w), int(1000 * box[3] / h)]
 
 
 def main():
-    fx = fetch_fixture()
-    import json, torch
+    import torch
     from PIL import Image
     from transformers import LayoutLMv3Processor, LayoutLMv3ForTokenClassification
 
@@ -17,26 +16,34 @@ def main():
     model = LayoutLMv3ForTokenClassification.from_pretrained(ckpt, num_labels=7)
     model.eval()
 
-    tess = json.loads(open(fx["tesseract_input.json"]).read())
-    pages = {}
-    for label, n in [("p02", "02"), ("p06", "06")]:
-        img = Image.open(fx[f"pages_{label}.png"]).convert("RGB")
-        w, h = img.size
-        words = tess[n]["words"]
-        boxes = [_normalize_box(b, w, h) for b in tess[n]["boxes"]]
-        inputs = proc(img, words, boxes=boxes, return_tensors="pt", truncation=True, max_length=512)
-        with torch.no_grad():
-            out = model(**inputs)
-        preds = out.logits.argmax(-1)[0].tolist()
-        pages[label] = {
-            "n_words_in": len(words),
-            "n_tokens_out": len(preds),
-            "logits_shape": list(out.logits.shape),
-            "sample_pred_ids": preds[:30],
-            "license": "CC-BY-NC (non-commercial only)",
-        }
-    return {"checkpoint": ckpt, "pages": pages,
-            "note": "Pretrained head untrained -> labels uncalibrated; demonstrates load+inference path"}
+    def per_pdf(pdf_id, b):
+        pages = []
+        for img_path in b["page_imgs"]:
+            n = int(img_path.split("/")[-1].split("-")[1].split(".")[0])
+            img = Image.open(img_path).convert("RGB")
+            w, h = b["page_size"][str(n)]
+            page_words = b["page_words"][str(n)]
+            words = page_words["words"]
+            boxes = [_norm(bb, w, h) for bb in page_words["boxes"]]
+            if not words:
+                pages.append({"page_n": n, "n_words": 0, "skipped": "empty page"})
+                continue
+            try:
+                inputs = proc(img, words, boxes=boxes, return_tensors="pt",
+                              truncation=True, max_length=512)
+                with torch.no_grad():
+                    out = model(**inputs)
+                preds = out.logits.argmax(-1)[0].tolist()
+                pages.append({"page_n": n, "n_words_in": len(words),
+                              "n_tokens_out": len(preds),
+                              "logits_shape": list(out.logits.shape),
+                              "sample_preds": preds[:30]})
+            except Exception as e:
+                pages.append({"page_n": n, "error": f"{type(e).__name__}: {e}"})
+        return {"n_pages": len(pages), "pages": pages,
+                "license": "CC-BY-NC", "head": "untrained num_labels=7"}
+
+    return {"checkpoint": ckpt, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

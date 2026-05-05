@@ -1,27 +1,20 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
     import subprocess, pdfplumber
-    out_pdf = "/tmp/ocrmypdf_out.pdf"
-    res = subprocess.run(
-        ["ocrmypdf", "-l", "nor", "--force-ocr", "--output-type", "pdf", fx["test.pdf"], out_pdf],
-        capture_output=True, text=True, timeout=600,
-    )
-    pages = {}
-    if res.returncode == 0:
-        with pdfplumber.open(out_pdf) as pdf:
-            for i in [1, 5]:
-                txt = pdf.pages[i].extract_text() or ""
-                pages[f"p{i+1:02d}"] = {"n_chars": len(txt), "text": txt}
-    return {
-        "engine": "ocrmypdf+tesseract-nor",
-        "stdout_tail": res.stdout[-1000:],
-        "stderr_tail": res.stderr[-1000:],
-        "rc": res.returncode,
-        "pages": pages,
-    }
+
+    def per_pdf(pdf_id, b):
+        pages = []
+        with pdfplumber.open(b["pdf_ocr"]) as pdf:
+            for i, p in enumerate(pdf.pages):
+                txt = p.extract_text() or ""
+                pages.append({"page_n": i + 1, "n_chars": len(txt), "text": txt})
+        return {"n_pages": len(pages),
+                "total_chars": sum(p["n_chars"] for p in pages),
+                "pages": pages}
+
+    return {"engine": "ocrmypdf+tesseract-nor (precomputed)", "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

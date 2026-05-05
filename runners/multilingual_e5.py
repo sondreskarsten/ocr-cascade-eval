@@ -1,25 +1,37 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics, fetch_fixture
+import json
 
 
 def main():
     fx = fetch_fixture()
-    import json
-    from sentence_transformers import SentenceTransformer
-
     samples = json.loads(open(fx["samples.json"]).read())
+    canonical = samples["canonical_titles"]
+    from sentence_transformers import SentenceTransformer
     model = SentenceTransformer("intfloat/multilingual-e5-large-instruct")
+    cand_emb = model.encode(canonical, normalize_embeddings=True, batch_size=8)
 
-    task = "Given a Norwegian financial label, retrieve the canonical English/Norwegian label that matches it."
-    query = f"Instruct: {task}\nQuery: {samples['norwegian_label']}"
-    candidates = samples["candidates"]
-    q_emb = model.encode([query], normalize_embeddings=True)
-    c_emb = model.encode(candidates, normalize_embeddings=True)
-    scores = (q_emb @ c_emb.T)[0]
-    ranked = sorted(zip(candidates, [float(s) for s in scores]), key=lambda x: -x[1])
-    return {"checkpoint": "intfloat/multilingual-e5-large-instruct",
-            "dim": int(q_emb.shape[1]),
-            "query": samples["norwegian_label"],
-            "ranked": ranked}
+    def per_pdf(pdf_id, b):
+        lines = [ln.strip() for ln in b["full_text"].splitlines()
+                 if 3 <= len(ln.strip()) <= 80 and not ln.strip().replace(" ","").isdigit()]
+        seen = []
+        for ln in lines:
+            if ln not in seen: seen.append(ln)
+            if len(seen) >= 50: break
+        if not seen:
+            return {"n_extracted": 0, "matches": []}
+        emb = model.encode(seen, normalize_embeddings=True, batch_size=8)
+        scores = emb @ cand_emb.T
+        matches = []
+        for i, ln in enumerate(seen):
+            j = int(scores[i].argmax())
+            matches.append({"line": ln, "best_canonical": canonical[j], "score": float(scores[i][j])})
+        matches.sort(key=lambda x: -x["score"])
+        return {"n_extracted": len(seen),
+                "avg_top1_score": round(sum(m["score"] for m in matches)/len(matches), 3),
+                "top10": matches[:10], "bottom5": matches[-5:]}
+
+    return {"checkpoint": "intfloat/multilingual-e5-large-instruct", "n_canonicals": len(canonical),
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

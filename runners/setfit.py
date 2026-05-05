@@ -1,9 +1,7 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json
     from datasets import Dataset
     from setfit import SetFitModel, Trainer, TrainingArguments
 
@@ -17,26 +15,27 @@ def main():
         {"text": "Salgsinntekter", "label": 1},
         {"text": "Driftsinntekter", "label": 1},
     ]
-    eval_examples = [
-        {"text": "Resultatført skatt", "label": 0},
-        {"text": "Driftsinntekter totalt", "label": 1},
-    ]
     train_ds = Dataset.from_list(train_examples)
-    eval_ds = Dataset.from_list(eval_examples)
     model = SetFitModel.from_pretrained("NbAiLab/nb-sbert-base", labels=["tax", "revenue"])
-
-    args = TrainingArguments(num_epochs=1, batch_size=4, num_iterations=20)
-    trainer = Trainer(model=model, args=args, train_dataset=train_ds, eval_dataset=eval_ds,
+    args = TrainingArguments(num_epochs=1, batch_size=4, num_iterations=10)
+    trainer = Trainer(model=model, args=args, train_dataset=train_ds, eval_dataset=train_ds,
                       column_mapping={"text": "text", "label": "label"})
     trainer.train()
-    metrics = trainer.evaluate()
-    preds = model.predict(["Resultatført skatt på ordinært resultat",
-                           "Sum salgsinntekter 2024",
-                           "Annen finansinntekt"])
-    return {"backbone": "NbAiLab/nb-sbert-base",
-            "n_train": len(train_examples),
-            "metrics": dict(metrics) if hasattr(metrics, 'items') else metrics,
-            "predictions_on_unseen": list(preds)}
+
+    def per_pdf(pdf_id, b):
+        lines = []
+        for ln in b["full_text"].splitlines():
+            ln = ln.strip()
+            if 4 <= len(ln) <= 50 and ln[0:1].isalpha() and ln not in lines: lines.append(ln)
+            if len(lines) >= 20: break
+        if not lines:
+            return {"n_inputs": 0}
+        preds = model.predict(lines)
+        results = [{"line": ln, "pred": p} for ln, p in zip(lines, list(preds))]
+        return {"n_inputs": len(lines), "predictions": results}
+
+    return {"backbone": "NbAiLab/nb-sbert-base", "n_train_examples": len(train_examples),
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

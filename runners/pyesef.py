@@ -1,54 +1,32 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import urllib.request, zipfile, os, glob
+    import urllib.request
 
-    candidates = [
-        "https://filings.xbrl.org/213800FF8F9OG6MTUE31/2024-12-31/ESEF/NO/0/213800FF8F9OG6MTUE31-2024-12-31-ESEF-NO-0.zip",
-        "https://filings.xbrl.org/549300SUWCZWERMVB019/2024-12-31/ESEF/NO/0/549300SUWCZWERMVB019-2024-12-31-ESEF-NO-0.zip",
-        "https://filings.xbrl.org/2138006O0X73VFNUH294/2023-12-31/ESEF/NO/0/2138006O0X73VFNUH294-2023-12-31-ESEF-NO-0.zip",
-    ]
-    fetch_log = []
-    z, d = "/tmp/esef.zip", "/tmp/esef"
-    fetched_url = None
-    for url in candidates:
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=60) as r, open(z, "wb") as f:
-                f.write(r.read())
-            os.makedirs(d, exist_ok=True)
-            zipfile.ZipFile(z).extractall(d)
-            fetched_url = url
-            break
-        except Exception as e:
-            fetch_log.append({url: f"{type(e).__name__}: {e}"})
-
-    if fetched_url is None:
-        return {"status": "error", "fetch_log": fetch_log,
-                "note": "all candidate ESEF URLs returned errors"}
-
+    info = {"library": "pyesef"}
     try:
         import pyesef
+        info["version"] = getattr(pyesef, "__version__", "?")
+        info["module_dir"] = sorted([a for a in dir(pyesef) if not a.startswith("_")])[:40]
     except Exception as e:
-        return {"status": "import_only_failed", "fetched_url": fetched_url,
-                "import_error": f"{type(e).__name__}: {e}",
-                "note": "pyesef may not be on PyPI; arelle is canonical"}
+        info["import_error"] = f"{type(e).__name__}: {e}"
 
-    files = glob.glob(f"{d}/**/*.xhtml", recursive=True) + glob.glob(f"{d}/**/*.html", recursive=True)
-    sample = files[0] if files else None
-    info = {"pyesef_version": getattr(pyesef, "__version__", "?"),
-            "fetched_url": fetched_url, "report_file": sample,
-            "n_files_in_zip": len(files),
-            "module_dir": [x for x in dir(pyesef) if not x.startswith("_")][:40]}
-    if hasattr(pyesef, "extract") and sample:
-        try:
-            facts = pyesef.extract(sample)
-            info["sample_n_facts"] = len(facts) if hasattr(facts, "__len__") else None
-        except Exception as e:
-            info["extract_error"] = f"{type(e).__name__}: {e}"
-    return info
+    sec_url = "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm"
+    target = "/tmp/sec_ixbrl.htm"
+    try:
+        req = urllib.request.Request(sec_url, headers={"User-Agent": "sondre-eval@example.com"})
+        with urllib.request.urlopen(req, timeout=60) as r, open(target, "wb") as f:
+            f.write(r.read())
+        info["sample_fetched"] = True
+    except Exception as e:
+        info["sample_fetch_error"] = f"{type(e).__name__}: {e}"
+
+    def per_pdf(pdf_id, b):
+        return {"note": "pyesef + iXBRL: Norwegian regnskap PDFs are scans without XBRL tagging.",
+                "pdf_chars": len(b["full_text"])}
+
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

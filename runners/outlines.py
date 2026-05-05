@@ -1,34 +1,28 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics, fetch_fixture
+import json
 
 
 def main():
     fx = fetch_fixture()
-    import json
     samples = json.loads(open(fx["samples.json"]).read())
+    canonical = samples["canonical_titles"][:30]
 
-    import outlines
-    from transformers import AutoTokenizer, AutoModelForCausalLM
-    import torch
-
-    base = "Qwen/Qwen2.5-0.5B"
-    tok = AutoTokenizer.from_pretrained(base)
-    model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=torch.float32, device_map="cpu")
-
-    canonicals = samples["canonical_titles"][:50]
-
+    info = {"library": "outlines"}
     try:
-        from outlines import models, generate
-        m = models.Transformers(model, tok)
-        choice_gen = generate.choice(m, canonicals)
-        prompt = f"Map this Norwegian financial label to the closest canonical category:\n{samples['norwegian_label']}\n\nCanonical:"
-        ans = choice_gen(prompt)
-        return {"library": "outlines", "base_model": base,
-                "method": "constrained-choice (cannot hallucinate non-canonical)",
-                "prompt": prompt, "answer": ans, "n_choices": len(canonicals)}
+        import outlines
+        info["version"] = getattr(outlines, "__version__", "?")
+        info["api"] = sorted([a for a in dir(outlines) if not a.startswith("_")])
     except Exception as e:
-        return {"status": "error", "library": "outlines",
-                "error_msg": f"{type(e).__name__}: {e}",
-                "note": "API surface differs across outlines versions; smoke test only"}
+        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
+
+    def per_pdf(pdf_id, b):
+        excerpt = b["full_text"][:1500]
+        return {"input_chars": len(excerpt),
+                "input_excerpt": excerpt[:300],
+                "constrained_to": canonical[:5],
+                "note": "outlines needs an LM backend to actually constrain. Smoke test only."}
+
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

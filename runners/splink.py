@@ -1,20 +1,21 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json, pandas as pd
-    samples = json.loads(open(fx["samples.json"]).read())
     info = {"library": "splink"}
     try:
-        import splink
-        info["version"] = getattr(splink, "__version__", "?")
+        import splink as M
+        info["version"] = getattr(M, "__version__", "?")
+        info["module_dir"] = sorted([a for a in dir(M) if not a.startswith("_")])[:40]
     except Exception as e:
-        info["import_error"] = f"{type(e).__name__}: {e}"
-        return info
-    info["n_canonical"] = len(samples["canonical_titles"])
-    info["note"] = "Splink targets multi-attribute record linkage; not a direct fit for short label mapping."
-    return info
+        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
+
+    def per_pdf(pdf_id, b):
+        return {"input_chars": len(b["full_text"]),
+                "first_line": b["full_text"].splitlines()[0][:200] if b["full_text"] else "",
+                "note": "splink smoke test — module imported, full task needs LM/backend setup"}
+
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

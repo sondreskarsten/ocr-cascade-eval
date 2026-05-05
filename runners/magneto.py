@@ -1,21 +1,21 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json, subprocess, os
-    samples = json.loads(open(fx["samples.json"]).read())
-    info = {"library": "magneto", "paper": "arXiv:2412.08194"}
+    info = {"library": "magneto"}
     try:
-        subprocess.run(["pip", "install", "magneto-python"],
-                       capture_output=True, timeout=120)
-        import magneto
-        info["version"] = getattr(magneto, "__version__", "?")
-        info["module"] = sorted([x for x in dir(magneto) if not x.startswith("_")])[:30]
+        import magneto as M
+        info["version"] = getattr(M, "__version__", "?")
+        info["module_dir"] = sorted([a for a in dir(M) if not a.startswith("_")])[:40]
     except Exception as e:
-        info["error"] = f"{type(e).__name__}: {e}"
-        info["fallback"] = "Magneto is not on PyPI; try: pip install git+https://github.com/dataneuro/magneto"
-    return info
+        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
+
+    def per_pdf(pdf_id, b):
+        return {"input_chars": len(b["full_text"]),
+                "first_line": b["full_text"].splitlines()[0][:200] if b["full_text"] else "",
+                "note": "magneto smoke test — module imported, full task needs LM/backend setup"}
+
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

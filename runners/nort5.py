@@ -1,24 +1,36 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json, torch
-    from transformers import T5Tokenizer, T5ForConditionalGeneration
-    samples = json.loads(open(fx["samples.json"]).read())
+    import torch
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
     ckpt = "ltg/nort5-base"
     try:
-        tok = T5Tokenizer.from_pretrained(ckpt, trust_remote_code=True)
-        model = T5ForConditionalGeneration.from_pretrained(ckpt, trust_remote_code=True)
+        tok = AutoTokenizer.from_pretrained(ckpt, trust_remote_code=True)
+        model = AutoModelForSeq2SeqLM.from_pretrained(ckpt, trust_remote_code=True)
+        model.eval()
     except Exception as e:
-        return {"status": "error", "checkpoint": ckpt,
-                "error": f"{type(e).__name__}: {e}"}
-    model.eval()
-    inputs = tok([samples["norwegian_label"]], return_tensors="pt", padding=True)
-    with torch.no_grad():
-        out = model.generate(**inputs, max_new_tokens=64)
-    text = tok.batch_decode(out, skip_special_tokens=True)[0]
-    return {"checkpoint": ckpt, "input": samples["norwegian_label"], "output": text}
+        return {"status": "error", "checkpoint": ckpt, "error": f"{type(e).__name__}: {e}"}
+
+    def per_pdf(pdf_id, b):
+        lines = []
+        for ln in b["full_text"].splitlines():
+            ln = ln.strip()
+            if 5 <= len(ln) <= 80 and ln not in lines: lines.append(ln)
+            if len(lines) >= 5: break
+        outs = []
+        for ln in lines:
+            try:
+                inputs = tok([ln], return_tensors="pt", padding=True)
+                with torch.no_grad():
+                    out = model.generate(**inputs, max_new_tokens=64)
+                text = tok.batch_decode(out, skip_special_tokens=True)[0]
+                outs.append({"input": ln, "output": text})
+            except Exception as e:
+                outs.append({"input": ln, "error": f"{type(e).__name__}: {e}"})
+        return {"outputs": outs}
+
+    return {"checkpoint": ckpt, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

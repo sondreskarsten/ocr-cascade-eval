@@ -1,13 +1,15 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    return {"library": "bloomberggpt",
-            "status": "documented_only",
-            "checkpoint": "Bloomberg/BloombergGPT (50.6B)",
-            "license": "closed-source / proprietary",
-            "release_paper": "arXiv:2303.17564",
-            "note": "Cannot be loaded — weights not publicly distributed."}
+    def per_pdf(pdf_id, b):
+        return {"note": "BloombergGPT is closed source — no public checkpoint. Documenting for completeness.",
+                "pdf_chars": len(b["full_text"])}
+
+    return {"status": "documented_only",
+            "checkpoint": "BloombergGPT (Bloomberg L.P., closed)",
+            "paper": "https://arxiv.org/abs/2303.17564",
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

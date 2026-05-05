@@ -1,25 +1,29 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
+import re
 
 
 def main():
-    fx = fetch_fixture()
-    import json
     from transformers import pipeline
-    samples = json.loads(open(fx["samples.json"]).read())
-    candidates = ["SALT-NLP/FLANG-BERT", "yiyanghkust/finbert-pretrain"]
-    pipe, chosen, log = None, None, []
-    for c in candidates:
-        try:
-            pipe = pipeline("fill-mask", model=c)
-            chosen = c
-            break
-        except Exception as e:
-            log.append({c: f"{type(e).__name__}: {e}"})
-    if pipe is None:
-        return {"status": "error", "lookup_log": log,
-                "note": "FLANG-BERT not on HF Hub under that exact id"}
-    out = pipe("The bond yield [MASK] last quarter.", top_k=5)
-    return {"checkpoint": chosen, "fill_mask_demo": out}
+    pipe = pipeline("text-classification", model="SALT-NLP/FLANG-BERT", top_k=None, truncation=True, max_length=512)
+
+    def per_pdf(pdf_id, b):
+        sents = re.split(r"(?<=[.!?])\s+", b["full_text"])
+        sents = [s.strip() for s in sents if 20 <= len(s.strip()) <= 300]
+        sents = sents[:25]
+        preds = []
+        for s in sents:
+            try:
+                p = pipe(s)[0]
+                top = max(p, key=lambda x: x["score"])
+                preds.append({"text": s[:200], "label": top["label"], "score": round(top["score"], 3),
+                               "all_scores": [{"label": x["label"], "score": round(x["score"], 3)} for x in p]})
+            except Exception as e:
+                preds.append({"text": s[:200], "error": f"{type(e).__name__}: {e}"})
+        return {"n_sentences": len(sents), "predictions": preds}
+
+    return {"checkpoint": "SALT-NLP/FLANG-BERT",
+            "trained_on": "English-only finance text",
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

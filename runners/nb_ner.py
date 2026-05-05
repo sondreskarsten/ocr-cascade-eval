@@ -1,27 +1,32 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json
-    samples = json.loads(open(fx["samples.json"]).read())
     from transformers import pipeline
-    candidates = ["NbAiLab/nb-bert-base-ner", "saattrupdan/nbailab-base-ner-scandi"]
-    chosen, log = None, []
-    pipe = None
-    for c in candidates:
+    try:
+        pipe = pipeline("ner", model="saattrupdan/nbailab-base-ner-scandi", aggregation_strategy="simple")
+        task = "ner"
+    except Exception:
         try:
-            pipe = pipeline("token-classification", model=c, aggregation_strategy="simple")
-            chosen = c
-            break
+            pipe = pipeline("fill-mask", model="saattrupdan/nbailab-base-ner-scandi")
+            task = "fill-mask"
         except Exception as e:
-            log.append({c: f"{type(e).__name__}: {e}"})
-    if pipe is None:
-        return {"status": "error", "lookup_log": log}
-    ents = pipe(samples["ner_text"])
-    return {"checkpoint": chosen, "lookup_log": log,
-            "text": samples["ner_text"],
-            "entities": [{k: float(v) if hasattr(v, "item") else v for k, v in e.items()} for e in ents]}
+            return {"status": "error", "msg": f"{type(e).__name__}: {e}"}
+
+    def per_pdf(pdf_id, b):
+        text = b["full_text"][:2000]
+        if task == "ner":
+            res = pipe(text)
+            return {"task": "ner", "n_entities": len(res),
+                    "entities": [{"word": x.get("word"), "type": x.get("entity_group"),
+                                  "score": round(float(x.get("score",0)), 3)} for x in res[:30]]}
+        else:
+            sample = "Selskapet har en betydelig [MASK] i norske banker."
+            res = pipe(sample)
+            return {"task": "fill-mask", "input": sample,
+                    "predictions": [{"token": r["token_str"], "score": round(r["score"], 3)} for r in res[:5]]}
+
+    return {"checkpoint": "saattrupdan/nbailab-base-ner-scandi", "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

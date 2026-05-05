@@ -1,25 +1,31 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics, fetch_fixture
+import json
 
 
 def main():
     fx = fetch_fixture()
-    import json
+    samples = json.loads(open(fx["samples.json"]).read())
+    canonical = samples["canonical_titles"]
+
     from rapidfuzz import process, fuzz
 
-    samples = json.loads(open(fx["samples.json"]).read())
-    queries = [item["q"] for item in samples["queries"]]
-    candidates = samples["canonical_titles"]
+    def per_pdf(pdf_id, b):
+        seen = []
+        for ln in b["full_text"].splitlines():
+            ln = ln.strip()
+            if 3 <= len(ln) <= 80 and not ln.replace(" ","").isdigit() and ln not in seen:
+                seen.append(ln)
+            if len(seen) >= 50: break
+        matches = []
+        for ln in seen:
+            m = process.extractOne(ln, canonical, scorer=fuzz.WRatio)
+            matches.append({"line": ln, "best": m[0], "score": float(m[1])})
+        matches.sort(key=lambda x: -x["score"])
+        return {"n_lines": len(seen),
+                "avg_top_score": round(sum(m["score"] for m in matches)/max(len(matches),1), 1),
+                "top10": matches[:10], "bottom5": matches[-5:]}
 
-    top1 = []
-    for i, q in enumerate(queries):
-        m = process.extractOne(q, candidates, scorer=fuzz.WRatio)
-        top1.append({"q": q, "tier": samples["queries"][i]["tier"],
-                     "top1": m[0], "score": m[1]})
-    self_match = sum(1 for r in top1 if r["q"] == r["top1"])
-    return {"library": "rapidfuzz", "scorer": "WRatio",
-            "n_queries": len(queries), "n_candidates": len(candidates),
-            "self_match_rate": round(self_match/len(queries), 3),
-            "sample_top1": top1[:30]}
+    return {"library": "rapidfuzz", "scorer": "WRatio", "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

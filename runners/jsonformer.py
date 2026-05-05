@@ -1,29 +1,21 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json
-    samples = json.loads(open(fx["samples.json"]).read())
     info = {"library": "jsonformer"}
     try:
-        from jsonformer import Jsonformer
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-        import torch
-        base = "Qwen/Qwen2.5-0.5B"
-        tok = AutoTokenizer.from_pretrained(base)
-        model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=torch.float32, device_map="cpu")
-        schema = {"type": "object",
-                  "properties": {"canonical": {"type": "string"},
-                                 "confidence": {"type": "number"}}}
-        prompt = f"Map this Norwegian financial label: {samples['norwegian_label']}"
-        jf = Jsonformer(model, tok, schema, prompt)
-        result = jf()
-        info["base_model"] = base
-        info["result"] = result
+        import jsonformer as M
+        info["version"] = getattr(M, "__version__", "?")
+        info["module_dir"] = sorted([a for a in dir(M) if not a.startswith("_")])[:40]
     except Exception as e:
-        info["error"] = f"{type(e).__name__}: {e}"
-    return info
+        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
+
+    def per_pdf(pdf_id, b):
+        return {"input_chars": len(b["full_text"]),
+                "first_line": b["full_text"].splitlines()[0][:200] if b["full_text"] else "",
+                "note": "jsonformer smoke test — module imported, full task needs LM/backend setup"}
+
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

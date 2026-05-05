@@ -1,18 +1,20 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json
     from gliner import GLiNER
-
-    samples = json.loads(open(fx["samples.json"]).read())
     model = GLiNER.from_pretrained("urchade/gliner_multi-v2.1")
-    text = samples["ner_text"]
-    labels = samples["ner_labels"]
-    ents = model.predict_entities(text, labels)
+    labels = ["organisasjon", "person", "valuta", "tall", "rolle",
+              "regnskapspost", "dato", "sted"]
+
+    def per_pdf(pdf_id, b):
+        text = b["full_text"][:4000]
+        ents = model.predict_entities(text, labels)
+        return {"input_chars": len(text), "labels": labels, "n_entities": len(ents),
+                "entities": ents[:30]}
+
     return {"checkpoint": "urchade/gliner_multi-v2.1",
-            "text": text, "labels": labels, "entities": ents}
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

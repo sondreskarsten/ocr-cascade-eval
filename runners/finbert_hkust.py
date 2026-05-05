@@ -1,24 +1,29 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
+import re
 
 
 def main():
-    fx = fetch_fixture()
-    import json
     from transformers import pipeline
+    pipe = pipeline("text-classification", model="yiyanghkust/finbert-tone", top_k=None, truncation=True, max_length=512)
 
-    samples = json.loads(open(fx["samples.json"]).read())
-    pipe = pipeline("text-classification", model="yiyanghkust/finbert-tone", top_k=None)
+    def per_pdf(pdf_id, b):
+        sents = re.split(r"(?<=[.!?])\s+", b["full_text"])
+        sents = [s.strip() for s in sents if 20 <= len(s.strip()) <= 300]
+        sents = sents[:25]
+        preds = []
+        for s in sents:
+            try:
+                p = pipe(s)[0]
+                top = max(p, key=lambda x: x["score"])
+                preds.append({"text": s[:200], "label": top["label"], "score": round(top["score"], 3),
+                               "all_scores": [{"label": x["label"], "score": round(x["score"], 3)} for x in p]})
+            except Exception as e:
+                preds.append({"text": s[:200], "error": f"{type(e).__name__}: {e}"})
+        return {"n_sentences": len(sents), "predictions": preds}
 
-    nor_sentence = samples["norwegian_finance_sentence"]
-    eng_sentence = "FARBOSS AS reported a strong annual result of 241,101 NOK in 2024, a major improvement from 168,986 NOK the previous year, driven by increased financial income."
-    return {
-        "norwegian_input": nor_sentence,
-        "norwegian_pred": pipe(nor_sentence),
-        "english_input": eng_sentence,
-        "english_pred": pipe(eng_sentence),
-        "checkpoint": "yiyanghkust/finbert-tone",
-        "trained_on": "English Analyst report sentences",
-    }
+    return {"checkpoint": "yiyanghkust/finbert-tone",
+            "trained_on": "English-only finance text",
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

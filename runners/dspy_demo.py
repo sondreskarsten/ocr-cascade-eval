@@ -1,26 +1,27 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json
-    samples = json.loads(open(fx["samples.json"]).read())
     info = {"library": "dspy"}
     try:
         import dspy
         info["version"] = getattr(dspy, "__version__", "?")
-        info["module_top_level"] = sorted([x for x in dir(dspy) if not x.startswith("_")])[:40]
     except Exception as e:
-        info["import_error"] = f"{type(e).__name__}: {e}"
-        return info
-    info["smoke_test"] = {
-        "available_optimizers": [n for n in ["MIPROv2", "GEPA", "SIMBA", "BootstrapFewShot",
-                                              "BootstrapFewShotWithRandomSearch", "COPRO"]
-                                  if hasattr(dspy, n) or hasattr(getattr(dspy, "teleprompt", None), n)],
-        "n_canonical_choices": len(samples["canonical_titles"]),
-        "note": "DSPy needs an LM provider. No API key in this run."
-    }
-    return info
+        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
+
+    class ExtractFinancials(dspy.Signature):
+        """Extract company name and årsresultat from Norwegian regnskap text."""
+        text: str = dspy.InputField()
+        company_name: str = dspy.OutputField()
+        arsresultat: str = dspy.OutputField()
+
+    def per_pdf(pdf_id, b):
+        return {"signature": "ExtractFinancials(text -> company_name, arsresultat)",
+                "input_excerpt": b["full_text"][:300],
+                "input_chars": len(b["full_text"]),
+                "note": "DSPy needs an LM provider to actually run; smoke test demonstrates signature compilation"}
+
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

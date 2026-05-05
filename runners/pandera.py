@@ -1,40 +1,37 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
     import pandas as pd
     import pandera.pandas as pa
-    from pandera import Column, DataFrameSchema, Check
+    import re
 
-    df = pd.read_csv(fx["table.csv"])
-
-    schema = DataFrameSchema({
-        "label": Column(str, nullable=False),
-        "value_2024": Column(int, nullable=True),
-        "value_2023": Column(int, nullable=True),
+    schema = pa.DataFrameSchema({
+        "page_n": pa.Column(int, checks=pa.Check.greater_than(0)),
+        "n_chars": pa.Column(int, checks=pa.Check.ge(0)),
+        "n_norwegian_chars": pa.Column(int, checks=pa.Check.ge(0)),
     })
+    nordics = set("æøåÆØÅ")
 
-    sums_balance = df[df["label"].str.startswith("Sum")]
-    bad = []
-    try:
-        schema.validate(df, lazy=True)
-        validated = True
-    except Exception as e:
-        validated = False
-        bad.append(str(e)[:600])
+    def per_pdf(pdf_id, b):
+        rows = []
+        for k, txt in b["page_text"].items():
+            n_nor = sum(1 for ch in txt if ch in nordics)
+            rows.append({"page_n": int(k), "n_chars": len(txt), "n_norwegian_chars": n_nor})
+        df = pd.DataFrame(rows)
+        try:
+            schema.validate(df, lazy=True)
+            valid = True
+            errs = []
+        except Exception as e:
+            valid = False
+            errs = [str(e)[:300]]
+        return {"validated": valid, "errors": errs,
+                "summary": {"n_pages": len(df), "total_chars": int(df["n_chars"].sum()),
+                            "total_norwegian_chars": int(df["n_norwegian_chars"].sum()),
+                            "norwegian_ratio": round(df["n_norwegian_chars"].sum()/max(df["n_chars"].sum(),1), 4)}}
 
-    sub_2024 = df.loc[df.label == "Annen driftskostnad", "value_2024"].sum()
-    sum_2024 = df.loc[df.label == "Sum kostnader", "value_2024"].sum()
-
-    return {"library": "pandera",
-            "validated": validated,
-            "errors": bad,
-            "balance_check_2024": {
-                "Annen driftskostnad": int(sub_2024),
-                "Sum kostnader": int(sum_2024),
-                "match": int(sub_2024) == int(sum_2024),
-            }}
+    return {"library": "pandera", "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

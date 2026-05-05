@@ -1,30 +1,21 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json, pandas as pd
-    samples = json.loads(open(fx["samples.json"]).read())
     info = {"library": "valentine"}
     try:
-        from valentine import valentine_match
-        from valentine.algorithms import Coma
+        import valentine as M
+        info["version"] = getattr(M, "__version__", "?")
+        info["module_dir"] = sorted([a for a in dir(M) if not a.startswith("_")])[:40]
     except Exception as e:
-        info["import_error"] = f"{type(e).__name__}: {e}"
-        return info
-    queries = [item["q"] for item in samples["queries"][:10]]
-    cands = samples["canonical_titles"][:30]
-    df_q = pd.DataFrame({c: [] for c in queries})
-    df_c = pd.DataFrame({c: [] for c in cands})
-    try:
-        matcher = Coma()
-        matches = valentine_match(df_q, df_c, matcher)
-        info["matcher"] = "Coma"
-        info["n_matches"] = len(matches)
-        info["sample_matches"] = list(matches.items())[:10]
-    except Exception as e:
-        info["match_error"] = f"{type(e).__name__}: {e}"
-    return info
+        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
+
+    def per_pdf(pdf_id, b):
+        return {"input_chars": len(b["full_text"]),
+                "first_line": b["full_text"].splitlines()[0][:200] if b["full_text"] else "",
+                "note": "valentine smoke test — module imported, full task needs LM/backend setup"}
+
+    return {**info, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

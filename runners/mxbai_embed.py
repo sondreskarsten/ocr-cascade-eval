@@ -1,26 +1,37 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics, fetch_fixture
+import json
 
 
 def main():
     fx = fetch_fixture()
-    import json
-    from sentence_transformers import SentenceTransformer
     samples = json.loads(open(fx["samples.json"]).read())
+    canonical = samples["canonical_titles"]
+    from sentence_transformers import SentenceTransformer
     model = SentenceTransformer("mixedbread-ai/mxbai-embed-large-v1")
-    queries = [item["q"] for item in samples["queries"]]
-    cands = samples["canonical_titles"]
-    qe = model.encode(queries, normalize_embeddings=True)
-    ce = model.encode(cands, normalize_embeddings=True)
-    s = qe @ ce.T
-    top1 = []
-    for i, q in enumerate(queries):
-        idx = int(s[i].argmax())
-        top1.append({"q": q, "tier": samples["queries"][i]["tier"],
-                     "top1": cands[idx], "score": float(s[i][idx])})
-    self_match = sum(1 for r in top1 if r["q"] == r["top1"])
-    return {"checkpoint": "mixedbread-ai/mxbai-embed-large-v1",
-            "self_match_rate": round(self_match/len(queries),3),
-            "sample_top1": top1[:30]}
+    cand_emb = model.encode(canonical, normalize_embeddings=True, batch_size=8)
+
+    def per_pdf(pdf_id, b):
+        lines = [ln.strip() for ln in b["full_text"].splitlines()
+                 if 3 <= len(ln.strip()) <= 80 and not ln.strip().replace(" ","").isdigit()]
+        seen = []
+        for ln in lines:
+            if ln not in seen: seen.append(ln)
+            if len(seen) >= 50: break
+        if not seen:
+            return {"n_extracted": 0, "matches": []}
+        emb = model.encode(seen, normalize_embeddings=True, batch_size=8)
+        scores = emb @ cand_emb.T
+        matches = []
+        for i, ln in enumerate(seen):
+            j = int(scores[i].argmax())
+            matches.append({"line": ln, "best_canonical": canonical[j], "score": float(scores[i][j])})
+        matches.sort(key=lambda x: -x["score"])
+        return {"n_extracted": len(seen),
+                "avg_top1_score": round(sum(m["score"] for m in matches)/len(matches), 3),
+                "top10": matches[:10], "bottom5": matches[-5:]}
+
+    return {"checkpoint": "mixedbread-ai/mxbai-embed-large-v1", "n_canonicals": len(canonical),
+            "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

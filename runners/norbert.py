@@ -1,33 +1,32 @@
-from shared import fetch_fixture, run_with_metrics
+from shared import for_each_pdf, run_with_metrics
 
 
 def main():
-    fx = fetch_fixture()
-    import json, torch
-    from transformers import AutoTokenizer, AutoModel
-    samples = json.loads(open(fx["samples.json"]).read())
-    ckpt = "ltg/norbert3-base"
-    tok = AutoTokenizer.from_pretrained(ckpt, trust_remote_code=True)
-    model = AutoModel.from_pretrained(ckpt, trust_remote_code=True)
-    model.eval()
-    queries = [item["q"] for item in samples["queries"][:30]]
-    cands = samples["canonical_titles"][:100]
+    from transformers import pipeline
+    try:
+        pipe = pipeline("ner", model="ltg/norbert3-base", aggregation_strategy="simple")
+        task = "ner"
+    except Exception:
+        try:
+            pipe = pipeline("fill-mask", model="ltg/norbert3-base")
+            task = "fill-mask"
+        except Exception as e:
+            return {"status": "error", "msg": f"{type(e).__name__}: {e}"}
 
-    def embed(texts):
-        enc = tok(texts, padding=True, truncation=True, return_tensors="pt", max_length=64)
-        with torch.no_grad():
-            out = model(**enc)
-        emb = out.last_hidden_state.mean(dim=1)
-        return torch.nn.functional.normalize(emb, dim=1)
+    def per_pdf(pdf_id, b):
+        text = b["full_text"][:2000]
+        if task == "ner":
+            res = pipe(text)
+            return {"task": "ner", "n_entities": len(res),
+                    "entities": [{"word": x.get("word"), "type": x.get("entity_group"),
+                                  "score": round(float(x.get("score",0)), 3)} for x in res[:30]]}
+        else:
+            sample = "Selskapet har en betydelig [MASK] i norske banker."
+            res = pipe(sample)
+            return {"task": "fill-mask", "input": sample,
+                    "predictions": [{"token": r["token_str"], "score": round(r["score"], 3)} for r in res[:5]]}
 
-    qe = embed(queries)
-    ce = embed(cands)
-    scores = (qe @ ce.T).cpu().numpy()
-    top1 = []
-    for i, q in enumerate(queries):
-        idx = int(scores[i].argmax())
-        top1.append({"q": q, "top1": cands[idx], "score": float(scores[i][idx])})
-    return {"checkpoint": ckpt, "sample_top1": top1[:20]}
+    return {"checkpoint": "ltg/norbert3-base", "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":
