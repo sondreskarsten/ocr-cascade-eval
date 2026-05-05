@@ -621,6 +621,30 @@
       "memory": "8Gi",
       "cpu": "2",
       "timeout": "1800s"
+    },
+    {
+      "name": "ocr-eval-doctr-bbox",
+      "runner": "doctr_bbox",
+      "image": "ocr-eval-hf",
+      "memory": "16Gi",
+      "cpu": "4",
+      "timeout": "3600s"
+    },
+    {
+      "name": "ocr-eval-paddleocr-conf",
+      "runner": "paddleocr_conf",
+      "image": "ocr-eval-paddle",
+      "memory": "16Gi",
+      "cpu": "4",
+      "timeout": "3600s"
+    },
+    {
+      "name": "ocr-eval-ocrmypdf-hocr",
+      "runner": "ocrmypdf_hocr",
+      "image": "ocr-eval-table",
+      "memory": "8Gi",
+      "cpu": "2",
+      "timeout": "1800s"
     }
   ]
 }
