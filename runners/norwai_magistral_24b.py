@@ -1,41 +1,53 @@
-from shared import for_each_pdf, run_with_metrics
+from shared import fetch_fixture, run_with_metrics
 
 
 def main():
-    import os
+    fx = fetch_fixture()
+    import json, os
     from llama_cpp import Llama
     from huggingface_hub import hf_hub_download
 
+    samples = json.loads(open(fx["samples.json"]).read())
     candidates = [
         ("NorwAI/NorwAI-Magistral-24B-reasoning", "NorwAI-Magistral-24B-reasoning-Q8_0.gguf"),
-        ("charles6huang/NorwAI-Mixtral-8x7B-instruct-Q8_0-GGUF", "norwai-mixtral-8x7b-instruct-q8_0.gguf"),
-        ("charles6huang/NorwAI-Mixtral-8x7B-Q8_0-GGUF", "norwai-mixtral-8x7b-q8_0.gguf"),
+        ("NorwAI/NorwAI-Mistral-7B-instruct", "norwai-mistral-7b-instruct-q4_k_m.gguf"),
+        ("NorwAI/NorwAI-Mistral-7B-instruct", "norwai-mistral-7b-instruct-q5_k_m.gguf"),
+        ("NorwAI/NorwAI-Mistral-7B", "normistral-7b.Q4_K_M.gguf"),
+        ("NorwAI/NorwAI-Llama2-7B", "norllama2-7b.Q4_K_M.gguf"),
     ]
-    gguf, log, chosen = None, [], None
+    gguf_path, log = None, []
+    chosen = None
     for r, fn in candidates:
         try:
-            gguf = hf_hub_download(repo_id=r, filename=fn); chosen = (r, fn); break
+            gguf_path = hf_hub_download(repo_id=r, filename=fn)
+            chosen = (r, fn)
+            break
         except Exception as e:
-            log.append({f"{r}/{fn}": f"{type(e).__name__}: {e}"})
-    if gguf is None:
+            log.append({f"{r}/{fn}": f"{type(e).__name__}: {str(e)[:120]}"})
+
+    if gguf_path is None:
         return {"status": "error", "lookup_log": log}
 
-    llm = Llama(model_path=gguf, n_ctx=4096, n_threads=os.cpu_count(), verbose=False)
+    try:
+        llm = Llama(model_path=gguf_path, n_ctx=2048, n_threads=os.cpu_count(), verbose=False)
+    except Exception as e:
+        return {"status": "error", "lookup_log": log,
+                "load_error": f"{type(e).__name__}: {str(e)[:300]}",
+                "chosen_repo": chosen[0], "chosen_file": chosen[1]}
 
-    def per_pdf(pdf_id, b):
-        excerpt = b["full_text"][:2500]
-        prompts = [
-            f"Her er eit utdrag frå eit norsk regnskap:\n\n{excerpt}\n\nKva er namnet på selskapet?\nSvar:",
-            f"Her er eit utdrag frå eit norsk regnskap:\n\n{excerpt}\n\nKva er årsresultatet?\nSvar:",
-        ]
-        comps = []
-        for p in prompts:
+    prompts = [
+        "Skriv ein kort definisjon av 'fri eigenkapital' på nynorsk.\nSvar:",
+        "Forklar kort 'going concern' i norsk regnskapssamanheng.\nSvar:",
+    ]
+    completions = []
+    for p in prompts:
+        try:
             out = llm(p, max_tokens=200, temperature=0.0)
-            comps.append({"prompt_tail": p[-200:], "completion": out["choices"][0]["text"]})
-        return {"completions": comps}
-
-    return {"checkpoint_repo": chosen[0], "checkpoint_file": chosen[1],
-            "lookup_log": log, "per_pdf": for_each_pdf(per_pdf)}
+            completions.append({"prompt": p, "completion": out["choices"][0]["text"]})
+        except Exception as e:
+            completions.append({"prompt": p, "error": f"{type(e).__name__}: {e}"})
+    return {"chosen_repo": chosen[0], "chosen_file": chosen[1],
+            "lookup_log": log, "completions": completions}
 
 
 if __name__ == "__main__":

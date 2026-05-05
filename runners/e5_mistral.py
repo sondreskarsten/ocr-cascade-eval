@@ -6,13 +6,32 @@ def main():
     fx = fetch_fixture()
     samples = json.loads(open(fx["samples.json"]).read())
     canonical = samples["canonical_titles"]
+
     from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer("intfloat/e5-mistral-7b-instruct")
+
+    candidates = [
+        "intfloat/e5-large-v2",
+        "intfloat/e5-large-instruct",
+        "intfloat/multilingual-e5-large-instruct",
+    ]
+    chosen, log = None, []
+    for c in candidates:
+        try:
+            model = SentenceTransformer(c)
+            chosen = c
+            break
+        except Exception as e:
+            log.append({c: f"{type(e).__name__}: {str(e)[:150]}"})
+    if chosen is None:
+        return {"status": "error", "intent": "intfloat/e5-mistral-7b-instruct (too large for 32Gi)",
+                "log": log}
+
+    note = "e5-mistral-7b-instruct exceeds Cloud Run 32Gi memory; fallback to smaller e5 variant"
     cand_emb = model.encode(canonical, normalize_embeddings=True, batch_size=8)
 
     def per_pdf(pdf_id, b):
         lines = [ln.strip() for ln in b["full_text"].splitlines()
-                 if 3 <= len(ln.strip()) <= 80 and not ln.strip().replace(" ","").isdigit()]
+                 if 3 <= len(ln.strip()) <= 80 and not ln.strip().replace(" ", "").isdigit()]
         seen = []
         for ln in lines:
             if ln not in seen: seen.append(ln)
@@ -30,7 +49,8 @@ def main():
                 "avg_top1_score": round(sum(m["score"] for m in matches)/len(matches), 3),
                 "top10": matches[:10], "bottom5": matches[-5:]}
 
-    return {"checkpoint": "intfloat/e5-mistral-7b-instruct", "n_canonicals": len(canonical),
+    return {"checkpoint": chosen, "note": note, "log": log,
+            "n_canonicals": len(canonical),
             "per_pdf": for_each_pdf(per_pdf)}
 
 
