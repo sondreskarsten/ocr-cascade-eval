@@ -613,6 +613,14 @@
       "memory": "8Gi",
       "cpu": "2",
       "timeout": "1800s"
+    },
+    {
+      "name": "ocr-eval-tesseract-tsv",
+      "runner": "tesseract_tsv",
+      "image": "ocr-eval-table",
+      "memory": "8Gi",
+      "cpu": "2",
+      "timeout": "1800s"
     }
   ]
 }
