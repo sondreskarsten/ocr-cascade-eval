@@ -46,15 +46,22 @@ def _tesseract_tsv_per_page(img_path, lang="nor"):
             digits = re.sub(r"[^\d]", "", t)
             j = i + 1
             x_anchor = tokens[i]["right"]
+            within_gaps = []
             while j < len(tokens):
                 tn = tokens[j]["text"]
-                if (re.match(r"^\d{1,3}$", tn) and
-                    tokens[j]["left"] - x_anchor < 250):
-                    digits += tn
-                    x_anchor = tokens[j]["right"]
-                    j += 1
-                else:
+                if not re.match(r"^\d{1,3}$", tn):
                     break
+                gap = tokens[j]["left"] - x_anchor
+                if gap >= 130:
+                    break
+                if within_gaps:
+                    median_gap = sorted(within_gaps)[len(within_gaps)//2]
+                    if gap > 2.5 * max(median_gap, 20) and gap > 50:
+                        break
+                within_gaps.append(gap)
+                digits += tn
+                x_anchor = tokens[j]["right"]
+                j += 1
             try:
                 v = int(sign + digits)
                 if abs(v) >= 10:

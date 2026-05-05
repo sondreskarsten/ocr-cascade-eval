@@ -15,8 +15,12 @@ from shared import for_each_pdf, run_with_metrics
 import re
 
 
-def _cluster_row_numbers(words, x_gap_threshold=250):
-    """Same row-clustering as tesseract_tsv: group adjacent number-tokens within a row."""
+def _cluster_row_numbers(words, x_gap_threshold=130):
+    """Same row-clustering as tesseract_tsv: group adjacent number-tokens within a row.
+
+    Uses median-gap heuristic to detect column boundaries — prevents merging
+    current-year and prior-year columns into one giant number.
+    """
     by_row = {}
     for w in words:
         # row_id by quantized y-center (5px buckets)
@@ -37,17 +41,24 @@ def _cluster_row_numbers(words, x_gap_threshold=250):
             digits = re.sub(r"[^\d]", "", t)
             x_anchor = ws[i]["bbox_abs"][2]
             confs = [ws[i]["conf"]]
+            within_gaps = []
             j = i + 1
             while j < len(ws):
                 tn = ws[j]["text"]
-                if (re.match(r"^\d{1,3}$", tn) and
-                    ws[j]["bbox_abs"][0] - x_anchor < x_gap_threshold):
-                    digits += tn
-                    x_anchor = ws[j]["bbox_abs"][2]
-                    confs.append(ws[j]["conf"])
-                    j += 1
-                else:
+                if not re.match(r"^\d{1,3}$", tn):
                     break
+                gap = ws[j]["bbox_abs"][0] - x_anchor
+                if gap >= x_gap_threshold:
+                    break
+                if within_gaps:
+                    median_gap = sorted(within_gaps)[len(within_gaps)//2]
+                    if gap > 2.5 * max(median_gap, 20) and gap > 50:
+                        break
+                within_gaps.append(gap)
+                digits += tn
+                x_anchor = ws[j]["bbox_abs"][2]
+                confs.append(ws[j]["conf"])
+                j += 1
             try:
                 v = int(sign + digits)
                 if abs(v) >= 10:
