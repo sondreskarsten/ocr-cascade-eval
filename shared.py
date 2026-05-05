@@ -3,13 +3,16 @@ from pathlib import Path
 from google.cloud import storage
 
 BUCKET = "sondre_brreg_data"
-RUN_PREFIX = "raw/ocr_eval_2026_05_05"
+RUN_PREFIX = os.environ.get("RUN_PREFIX", "raw/ocr_eval_2026_05_05")
 FIXTURE_PREFIX = f"{RUN_PREFIX}/fixture"
 RESULTS_PREFIX = f"{RUN_PREFIX}/results"
 LOCAL_FIXTURE = Path("/tmp/fixture")
 LOCAL_FIXTURE.mkdir(parents=True, exist_ok=True)
 
-PDF_IDS = ["pdf_a", "pdf_b"]
+def _pdf_ids_from_meta(fx):
+    return sorted(json.loads(open(fx["pdfs_meta.json"]).read()).keys())
+
+PDF_IDS = None  # populated lazily by fetch_pdfs()
 
 
 def _client():
@@ -32,22 +35,28 @@ def fetch_fixture():
 def fetch_pdfs():
     fx = fetch_fixture()
     meta = json.loads(open(fx["pdfs_meta.json"]).read())
+    pdf_ids = sorted(meta.keys())
     bundles = {}
-    for pdf_id in PDF_IDS:
+    for pdf_id in pdf_ids:
         info = meta[pdf_id]
         pages = sorted(
-            [v for k, v in fx.items() if k.startswith(f"{pdf_id}_pages/")],
-            key=lambda p: int(Path(p).stem.split("-")[1])
+            [v for k, v in fx.items() if k.startswith(f"pages/{pdf_id}_p-")
+                                       or k.startswith(f"{pdf_id}_pages/")],
+            key=lambda p: int(Path(p).stem.split("-")[1].split("_")[0])
         )
+        pdf_path = fx.get(f"{pdf_id}.pdf") or fx.get(f"pdfs/{pdf_id}.pdf")
+        ocr_path = fx.get(f"{pdf_id}_ocr.pdf") or fx.get(f"ocr_pdfs/{pdf_id}_ocr.pdf")
         bundles[pdf_id] = {
-            "pdf": fx[f"{pdf_id}.pdf"],
-            "pdf_ocr": fx[f"{pdf_id}_ocr.pdf"],
+            "pdf": pdf_path,
+            "pdf_ocr": ocr_path,
             "n_pages": info["n_pages"],
             "page_imgs": pages,
             "page_text": info["page_text"],
             "page_words": info["page_words"],
             "page_size": info["page_size"],
             "full_text": info["full_text"],
+            "orgnr": info.get("orgnr"),
+            "year": info.get("year"),
         }
     return bundles
 
@@ -90,12 +99,12 @@ def for_each_pdf(fn, isolate_errors=True):
     """Apply fn(pdf_id, pdf_bundle) -> dict to each PDF, returns {pdf_a: ..., pdf_b: ...}"""
     bundles = fetch_pdfs()
     out = {}
-    for pdf_id in PDF_IDS:
+    for pdf_id, bundle in bundles.items():
         if isolate_errors:
             try:
-                out[pdf_id] = fn(pdf_id, bundles[pdf_id])
+                out[pdf_id] = fn(pdf_id, bundle)
             except Exception as e:
                 out[pdf_id] = {"_per_pdf_error": f"{type(e).__name__}: {e}"}
         else:
-            out[pdf_id] = fn(pdf_id, bundles[pdf_id])
+            out[pdf_id] = fn(pdf_id, bundle)
     return out
