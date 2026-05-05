@@ -473,7 +473,7 @@
     {
       "name": "ocr-eval-rapidfuzz",
       "runner": "rapidfuzz",
-      "image": "ocr-eval-table",
+      "image": "ocr-eval-xbrl",
       "memory": "8Gi",
       "cpu": "2",
       "timeout": "600s"
