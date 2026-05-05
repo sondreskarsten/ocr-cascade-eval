@@ -17,7 +17,7 @@ import re
 import subprocess
 
 
-def _cluster_row_numbers(words, x_gap_threshold=130):
+def _cluster_row_numbers(words, x_gap_threshold=100):
     by_row = {}
     for w in words:
         cy = (w["bbox"][1] + w["bbox"][3]) / 2
@@ -48,7 +48,7 @@ def _cluster_row_numbers(words, x_gap_threshold=130):
                     break
                 if within_gaps:
                     median_gap = sorted(within_gaps)[len(within_gaps)//2]
-                    if gap > 2.5 * max(median_gap, 20) and gap > 50:
+                    if gap > 2.0 * max(median_gap, 15) and gap > 35:
                         break
                 within_gaps.append(gap)
                 digits += tn
@@ -58,8 +58,11 @@ def _cluster_row_numbers(words, x_gap_threshold=130):
             try:
                 v = int(sign + digits)
                 if abs(v) >= 10:
+                    bbox = [ws[i]["bbox"][0], ws[i]["bbox"][1],
+                            x_anchor, ws[i]["bbox"][3]]
                     found.append({
                         "value": v,
+                        "bbox": bbox,
                         "n_tokens": j - i,
                         "avg_conf": round(sum(confs) / len(confs), 2),
                     })

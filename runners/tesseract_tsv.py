@@ -52,11 +52,11 @@ def _tesseract_tsv_per_page(img_path, lang="nor"):
                 if not re.match(r"^\d{1,3}$", tn):
                     break
                 gap = tokens[j]["left"] - x_anchor
-                if gap >= 130:
+                if gap >= 100:
                     break
                 if within_gaps:
                     median_gap = sorted(within_gaps)[len(within_gaps)//2]
-                    if gap > 2.5 * max(median_gap, 20) and gap > 50:
+                    if gap > 2.0 * max(median_gap, 15) and gap > 35:
                         break
                 within_gaps.append(gap)
                 digits += tn

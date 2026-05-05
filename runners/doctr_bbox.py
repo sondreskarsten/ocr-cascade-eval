@@ -15,7 +15,7 @@ from shared import for_each_pdf, run_with_metrics
 import re
 
 
-def _cluster_row_numbers(words, x_gap_threshold=130):
+def _cluster_row_numbers(words, x_gap_threshold=100):
     """Same row-clustering as tesseract_tsv: group adjacent number-tokens within a row.
 
     Uses median-gap heuristic to detect column boundaries — prevents merging
@@ -52,7 +52,7 @@ def _cluster_row_numbers(words, x_gap_threshold=130):
                     break
                 if within_gaps:
                     median_gap = sorted(within_gaps)[len(within_gaps)//2]
-                    if gap > 2.5 * max(median_gap, 20) and gap > 50:
+                    if gap > 2.0 * max(median_gap, 15) and gap > 35:
                         break
                 within_gaps.append(gap)
                 digits += tn
