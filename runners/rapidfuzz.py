@@ -5,7 +5,7 @@ import json
 def main():
     fx = fetch_fixture()
     samples = json.loads(open(fx["samples.json"]).read())
-    canonical = samples["canonical_titles"]
+    canonical = samples["schema_canonical"]
 
     from rapidfuzz import process, fuzz
 
