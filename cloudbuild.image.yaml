@@ -1,0 +1,11 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/${_IMG}:latest', '-f', 'images/${_IMG_DIR}/Dockerfile', '.']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/${_IMG}:latest']
+images:
+- 'europe-north1-docker.pkg.dev/$PROJECT_ID/brreg-pipelines/${_IMG}:latest'
+options:
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: 100
+timeout: '3600s'

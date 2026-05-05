@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --upgrade pip
 RUN pip install \
     "numpy<2" \
-    "arelle-release==2.34.10" \
+    "arelle-release==2.40.1" \
     "psutil" \
     "google-cloud-storage" \
     "lxml"
