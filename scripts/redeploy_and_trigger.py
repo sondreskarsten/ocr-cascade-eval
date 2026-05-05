@@ -38,13 +38,15 @@ def kick(j):
     code, body = http("GET", base)
     if code != 200:
         return j["name"], "get-failed", code
-    # Bump an env var to force new revision -> new image pull
+    # Bump an env var to force new revision -> new image pull, and set RUN_PREFIX
     body["template"]["template"].setdefault("containers", [{}])
     container = body["template"]["template"]["containers"][0]
     env = container.get("env", []) or []
     import time
-    env = [e for e in env if e.get("name") != "REBUILD_TS"]
+    run_prefix = os.environ.get("RUN_PREFIX", "raw/ocr_eval_2026_05_05")
+    env = [e for e in env if e.get("name") not in ("REBUILD_TS", "RUN_PREFIX")]
     env.append({"name": "REBUILD_TS", "value": str(int(time.time()))})
+    env.append({"name": "RUN_PREFIX", "value": run_prefix})
     container["env"] = env
     code_p, _ = http("PATCH", base, body)
     if code_p not in (200, 202):

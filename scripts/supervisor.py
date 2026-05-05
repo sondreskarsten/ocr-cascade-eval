@@ -27,7 +27,9 @@ PROJECT, REGION = COMMON["project"], COMMON["region"]
 PARENT = f"projects/{PROJECT}/locations/{REGION}"
 MAX_ATTEMPTS = 3
 BUCKET = "sondre_brreg_data"
-STATUS_PREFIX = "raw/ocr_eval_2026_05_05/supervisor"
+RUN_PREFIX = os.environ.get("RUN_PREFIX", "raw/ocr_eval_2026_05_05")
+STATUS_PREFIX = f"{RUN_PREFIX}/supervisor"
+RESULTS_PREFIX = f"{RUN_PREFIX}/results"
 
 
 def token():
@@ -66,6 +68,7 @@ def job_spec(j):
                     "image": image,
                     "args": [f"runners.{j['runner']}"],
                     "resources": {"limits": {"cpu": j["cpu"], "memory": j["memory"]}},
+                    "env": [{"name": "RUN_PREFIX", "value": RUN_PREFIX}],
                 }],
                 "timeout": j["timeout"],
                 "serviceAccount": COMMON["service_account"],
@@ -115,7 +118,7 @@ def execution_state(execs):
 
 def has_result(runner_name):
     blob = storage.Client().bucket(BUCKET).blob(
-        f"raw/ocr_eval_2026_05_05/results/{runner_name}.json")
+        f"{RESULTS_PREFIX}/{runner_name}.json")
     return blob.exists()
 
 

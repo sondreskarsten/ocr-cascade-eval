@@ -31,6 +31,7 @@ def request(method, url, body=None):
 
 def job_spec(j):
     image = f"{COMMON['registry_prefix']}/{j['image']}:latest"
+    run_prefix = os.environ.get("RUN_PREFIX", "raw/ocr_eval_2026_05_05")
     return {
         "launchStage": "GA",
         "template": {
@@ -41,6 +42,7 @@ def job_spec(j):
                     "image": image,
                     "args": [f"runners.{j['runner']}"],
                     "resources": {"limits": {"cpu": j["cpu"], "memory": j["memory"]}},
+                    "env": [{"name": "RUN_PREFIX", "value": run_prefix}],
                 }],
                 "timeout": j["timeout"],
                 "serviceAccount": COMMON["service_account"],
