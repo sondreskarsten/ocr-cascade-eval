@@ -9,30 +9,33 @@ def main():
 
     samples = json.loads(open(fx["samples.json"]).read())
     candidates = [
-        ("bartowski/NorwAI-Magistral-24B-GGUF", "NorwAI-Magistral-24B-Q4_K_M.gguf"),
-        ("NorwAI/NorwAI-Magistral-24B-GGUF", "NorwAI-Magistral-24B-q4_K_M.gguf"),
-        ("mradermacher/NorwAI-Magistral-24B-GGUF", "NorwAI-Magistral-24B.Q4_K_M.gguf"),
-        ("RichardErkhov/NorwAI_-_Magistral-24B-gguf", "Magistral-24B.Q4_K_M.gguf"),
+        ("NorwAI/NorwAI-Magistral-24B-reasoning", "NorwAI-Magistral-24B-reasoning-Q8_0.gguf"),
+        ("charles6huang/NorwAI-Mixtral-8x7B-instruct-Q8_0-GGUF", "norwai-mixtral-8x7b-instruct-q8_0.gguf"),
+        ("charles6huang/NorwAI-Mixtral-8x7B-Q8_0-GGUF", "norwai-mixtral-8x7b-q8_0.gguf"),
     ]
     gguf_path, log = None, []
     for r, fn in candidates:
         try:
             gguf_path = hf_hub_download(repo_id=r, filename=fn)
+            chosen = (r, fn)
             break
         except Exception as e:
             log.append({f"{r}/{fn}": f"{type(e).__name__}: {e}"})
 
     if gguf_path is None:
-        return {"status": "error",
-                "note": "No public GGUF of NorwAI Magistral 24B located on HF Hub.",
-                "lookup_log": log}
+        return {"status": "error", "lookup_log": log}
 
     llm = Llama(model_path=gguf_path, n_ctx=2048, n_threads=os.cpu_count(), verbose=False)
-    prompt = "Skriv ein kort definisjon av 'fri eigenkapital' på nynorsk.\nSvar:"
-    out = llm(prompt, max_tokens=200, temperature=0.0)
-    return {"checkpoint": "NorwAI/NorwAI-Magistral-24B (Q4_K_M)",
-            "gguf_path": gguf_path, "prompt": prompt,
-            "completion": out["choices"][0]["text"]}
+    prompts = [
+        "Skriv ein kort definisjon av 'fri eigenkapital' på nynorsk.\nSvar:",
+        "Forklar kort 'going concern' i norsk regnskapssamanheng.\nSvar:",
+    ]
+    completions = []
+    for p in prompts:
+        out = llm(p, max_tokens=200, temperature=0.0)
+        completions.append({"prompt": p, "completion": out["choices"][0]["text"]})
+    return {"checkpoint_repo": chosen[0], "checkpoint_file": chosen[1],
+            "lookup_log": log, "completions": completions}
 
 
 if __name__ == "__main__":
