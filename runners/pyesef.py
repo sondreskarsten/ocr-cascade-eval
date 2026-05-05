@@ -1,32 +1,40 @@
-from shared import for_each_pdf, run_with_metrics
+from shared import fetch_fixture, run_with_metrics
 
 
 def main():
-    import urllib.request
+    fx = fetch_fixture()
+    import urllib.request, os
 
-    info = {"library": "pyesef"}
+    info = {}
     try:
         import pyesef
-        info["version"] = getattr(pyesef, "__version__", "?")
-        info["module_dir"] = sorted([a for a in dir(pyesef) if not a.startswith("_")])[:40]
+        info["pyesef_version"] = getattr(pyesef, "__version__", "?")
+        info["pyesef_api"] = [x for x in dir(pyesef) if not x.startswith("_")][:30]
     except Exception as e:
-        info["import_error"] = f"{type(e).__name__}: {e}"
+        return {"status": "import_only_failed",
+                "import_error": f"{type(e).__name__}: {e}",
+                "note": "pyesef not on PyPI in this version; arelle is canonical"}
 
-    sec_url = "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm"
-    target = "/tmp/sec_ixbrl.htm"
+    sample_url = "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm"
+    target = "/tmp/aapl.htm"
     try:
-        req = urllib.request.Request(sec_url, headers={"User-Agent": "sondre-eval@example.com"})
-        with urllib.request.urlopen(req, timeout=60) as r, open(target, "wb") as f:
+        req = urllib.request.Request(sample_url,
+            headers={"User-Agent": "Sondre Skarsten sondre@example.no"})
+        with urllib.request.urlopen(req, timeout=120) as r, open(target, "wb") as f:
             f.write(r.read())
-        info["sample_fetched"] = True
+        info["fetched_bytes"] = os.path.getsize(target)
+        info["sample_url"] = sample_url
     except Exception as e:
-        info["sample_fetch_error"] = f"{type(e).__name__}: {e}"
+        info["fetch_error"] = f"{type(e).__name__}: {e}"
+        return info
 
-    def per_pdf(pdf_id, b):
-        return {"note": "pyesef + iXBRL: Norwegian regnskap PDFs are scans without XBRL tagging.",
-                "pdf_chars": len(b["full_text"])}
-
-    return {**info, "per_pdf": for_each_pdf(per_pdf)}
+    if hasattr(pyesef, "extract"):
+        try:
+            facts = pyesef.extract(target)
+            info["sample_n_facts"] = len(facts) if hasattr(facts, "__len__") else None
+        except Exception as e:
+            info["extract_error"] = f"{type(e).__name__}: {e}"
+    return info
 
 
 if __name__ == "__main__":

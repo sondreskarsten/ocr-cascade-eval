@@ -4,13 +4,22 @@ from shared import for_each_pdf, run_with_metrics
 def main():
     import torch
     from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
     ckpt = "ltg/nort5-base"
     try:
-        tok = AutoTokenizer.from_pretrained(ckpt, trust_remote_code=True)
+        tok = AutoTokenizer.from_pretrained(ckpt, trust_remote_code=True, use_fast=False)
+    except Exception as e1:
+        try:
+            tok = AutoTokenizer.from_pretrained(ckpt, trust_remote_code=True)
+        except Exception as e2:
+            return {"status": "error", "checkpoint": ckpt,
+                    "tokenizer_errors": [f"slow: {e1}", f"fast: {e2}"]}
+    try:
         model = AutoModelForSeq2SeqLM.from_pretrained(ckpt, trust_remote_code=True)
         model.eval()
     except Exception as e:
-        return {"status": "error", "checkpoint": ckpt, "error": f"{type(e).__name__}: {e}"}
+        return {"status": "error", "checkpoint": ckpt,
+                "model_error": f"{type(e).__name__}: {e}"}
 
     def per_pdf(pdf_id, b):
         lines = []
@@ -21,10 +30,10 @@ def main():
         outs = []
         for ln in lines:
             try:
-                inputs = tok([ln], return_tensors="pt", padding=True)
+                inputs = tok(ln, return_tensors="pt")
                 with torch.no_grad():
-                    out = model.generate(**inputs, max_new_tokens=64)
-                text = tok.batch_decode(out, skip_special_tokens=True)[0]
+                    out = model.generate(**inputs, max_new_tokens=32)
+                text = tok.decode(out[0], skip_special_tokens=True)
                 outs.append({"input": ln, "output": text})
             except Exception as e:
                 outs.append({"input": ln, "error": f"{type(e).__name__}: {e}"})

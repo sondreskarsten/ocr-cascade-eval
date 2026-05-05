@@ -1,35 +1,41 @@
-from shared import for_each_pdf, run_with_metrics
+from shared import for_each_pdf, run_with_metrics, fetch_fixture
+import json
 
 
 def main():
+    fx = fetch_fixture()
+    samples = json.loads(open(fx["samples.json"]).read())
     import os
     from huggingface_hub import hf_hub_download
 
     candidates = [
-        ("MaziyarPanahi/TableLlama-GGUF", "TableLlama.Q4_K_M.gguf"),
-        ("TheBloke/TableLlama-GGUF", "tablellama.Q4_K_M.gguf"),
-        ("RichardErkhov/osunlp_-_TableLlama-gguf", "TableLlama.Q4_K_M.gguf"),
+        ("mradermacher/TableLlama-GGUF", "TableLlama.Q4_K_M.gguf"),
+        ("LoneStriker/TableLlama-GGUF", "TableLlama-Q4_K_M.gguf"),
+        ("brittlewis12/TableLlama-GGUF", "tablellama.Q4_K_M.gguf"),
+        ("nold/TableLlama-GGUF", "TableLlama.Q4_K_M.gguf"),
     ]
-    gguf, log = None, []
+    gguf_path, log = None, []
     for r, fn in candidates:
         try:
-            gguf = hf_hub_download(repo_id=r, filename=fn); break
+            gguf_path = hf_hub_download(repo_id=r, filename=fn)
+            chosen = (r, fn)
+            break
         except Exception as e:
-            log.append({f"{r}/{fn}": f"{type(e).__name__}: {e}"})
-    if gguf is None:
-        return {"status": "error", "lookup_log": log,
-                "intended": "osunlp/TableLlama (Llama-2-13B base)"}
+            log.append({f"{r}/{fn}": f"{type(e).__name__}: {str(e)[:120]}"})
+    if gguf_path is None:
+        return {"status": "error", "intended": "osunlp/TableLlama (Llama-2-13B base)",
+                "lookup_log": log}
 
     from llama_cpp import Llama
-    llm = Llama(model_path=gguf, n_ctx=4096, n_threads=os.cpu_count(), verbose=False)
+    llm = Llama(model_path=gguf_path, n_ctx=2048, n_threads=os.cpu_count(), verbose=False)
 
     def per_pdf(pdf_id, b):
-        excerpt = b["full_text"][:1500]
-        prompt = f"Question: What is the company name and årsresultat in this Norwegian financial statement?\n{excerpt}\nAnswer:"
-        out = llm(prompt, max_tokens=100, temperature=0.0)
-        return {"answer": out["choices"][0]["text"]}
+        prompt = f"Question: {samples['table_qa_question']}\nAnswer:"
+        out = llm(prompt, max_tokens=64, temperature=0.0)
+        return {"prompt": prompt, "completion": out["choices"][0]["text"]}
 
-    return {"checkpoint": "TableLlama Q4_K_M", "lookup_log": log, "per_pdf": for_each_pdf(per_pdf)}
+    return {"checkpoint_repo": chosen[0], "checkpoint_file": chosen[1],
+            "log": log, "per_pdf": for_each_pdf(per_pdf)}
 
 
 if __name__ == "__main__":

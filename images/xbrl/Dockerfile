@@ -12,10 +12,10 @@ RUN pip install \
     "arelle-release==2.40.1" \
     "psutil" \
     "google-cloud-storage" \
-    "lxml"
+    "lxml" \
+    "rapidfuzz" "great-expectations" "pandera" "pandas"
 
 RUN pip install pyesef || true
-RUN pip install "great-expectations" "pandera" "rapidfuzz" "pandas" || true
 
 WORKDIR /app
 COPY shared.py /app/shared.py

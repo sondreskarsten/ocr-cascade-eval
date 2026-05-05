@@ -1,19 +1,38 @@
-from shared import for_each_pdf, run_with_metrics
+from shared import for_each_pdf, run_with_metrics, fetch_fixture
+import json
 
 
 def main():
-    info = {"library": "schemora"}
-    try:
-        import schemora as M
-        info["version"] = getattr(M, "__version__", "?")
-        info["module_dir"] = sorted([a for a in dir(M) if not a.startswith("_")])[:40]
-    except Exception as e:
-        return {"status": "error", "import_error": f"{type(e).__name__}: {e}"}
+    fx = fetch_fixture()
+    samples = json.loads(open(fx["samples.json"]).read())
+
+    info = {"approach": "SCHEMORA schema mapping (EMNLP 2025 industry track)",
+            "paper": "https://aclanthology.org/2025.emnlp-industry.120.pdf"}
+
+    import subprocess, os
+    repo_dir = "/tmp/schemora"
+    candidates_repos = [
+        "https://github.com/leozc/schemora",
+        "https://github.com/SchemaMatchingLab/schemora",
+    ]
+    cloned = False
+    for url in candidates_repos:
+        if os.path.isdir(repo_dir):
+            cloned = True
+            break
+        r = subprocess.run(["git", "clone", "--depth", "1", url, repo_dir],
+                           capture_output=True, text=True, timeout=60)
+        if r.returncode == 0:
+            cloned = True
+            info["repo_url"] = url
+            break
+    info["cloned"] = cloned
+    if cloned:
+        info["repo_files"] = os.listdir(repo_dir)[:20]
 
     def per_pdf(pdf_id, b):
         return {"input_chars": len(b["full_text"]),
-                "first_line": b["full_text"].splitlines()[0][:200] if b["full_text"] else "",
-                "note": "schemora smoke test — module imported, full task needs LM/backend setup"}
+                "candidates": samples["canonical_titles"][:5]}
 
     return {**info, "per_pdf": for_each_pdf(per_pdf)}
 

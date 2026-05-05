@@ -16,10 +16,8 @@ RUN pip install \
     "tabula-py==2.10.0" \
     "pdfplumber==0.11.4" \
     "pytesseract==0.3.13" \
-    "Pillow" \
-    "psutil" \
-    "google-cloud-storage"
-RUN pip install "splink" "dedupe" "valentine-codes" || true
+    "Pillow" "psutil" "google-cloud-storage" \
+    "rapidfuzz" "splink" "dedupe" "valentine"
 
 WORKDIR /app
 COPY shared.py /app/shared.py
