@@ -17,8 +17,8 @@ RUN pip install \
     "google-cloud-storage"
 
 WORKDIR /app
-COPY models/shared.py /app/shared.py
-COPY models /app/models
-ENV PYTHONPATH=/app:/app/models
+COPY shared.py /app/shared.py
+COPY runners /app/runners
+ENV PYTHONPATH=/app
 
-ENTRYPOINT ["python"]
+ENTRYPOINT ["python", "-m"]

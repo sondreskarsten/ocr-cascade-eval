@@ -19,10 +19,11 @@ RUN pip install \
     "Pillow" \
     "psutil" \
     "google-cloud-storage"
+RUN pip install "splink" "dedupe" "valentine-codes" || true
 
 WORKDIR /app
-COPY models/shared.py /app/shared.py
-COPY models /app/models
-ENV PYTHONPATH=/app:/app/models
+COPY shared.py /app/shared.py
+COPY runners /app/runners
+ENV PYTHONPATH=/app
 
-ENTRYPOINT ["python"]
+ENTRYPOINT ["python", "-m"]

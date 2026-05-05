@@ -39,7 +39,7 @@ def job_spec(j):
             "template": {
                 "containers": [{
                     "image": image,
-                    "args": [f"/app/{j['script']}"],
+                    "args": [f"runners.{j['runner']}"],
                     "resources": {"limits": {"cpu": j["cpu"], "memory": j["memory"]}},
                 }],
                 "timeout": j["timeout"],
@@ -69,9 +69,9 @@ def upsert(j):
 
 if __name__ == "__main__":
     results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         for r in ex.map(upsert, JOBS):
             results.append(r)
-            print(r[:3], (r[3].get("name") or r[3].get("error", {}).get("message", ""))[:120])
+            print(r[:3])
     ok = sum(1 for r in results if r[2] in (200, 201, 202))
     print(f"\n{ok}/{len(results)} OK")

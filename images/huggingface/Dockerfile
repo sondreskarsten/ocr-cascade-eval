@@ -6,35 +6,49 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git curl tesseract-ocr tesseract-ocr-nor poppler-utils \
+    libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip
-RUN pip install \
-    "torch==2.6.0" --index-url https://download.pytorch.org/whl/cpu
+RUN pip install "torch==2.6.0" --index-url https://download.pytorch.org/whl/cpu
 RUN pip install \
     "numpy<2" \
-    "transformers==4.46.3" \
-    "sentence-transformers==3.3.1" \
-    "accelerate==1.1.1" \
-    "peft==0.13.2" \
-    "huggingface_hub==0.26.5" \
-    "FlagEmbedding==1.3.2" \
-    "datasets==3.1.0" \
-    "setfit==1.1.0" \
-    "gliner==0.2.16" \
-    "gliclass==0.1.10" \
-    "Pillow==11.0.0" \
-    "pytesseract==0.3.13" \
-    "pdfplumber==0.11.4" \
-    "pandas==2.2.3" \
-    "psutil==6.1.0" \
-    "google-cloud-storage==2.18.2" \
-    "sentencepiece==0.2.0" \
-    "protobuf==5.28.3"
+    "transformers>=4.46,<4.50" \
+    "sentence-transformers>=3.3" \
+    "accelerate>=1.1" \
+    "peft>=0.13" \
+    "huggingface_hub>=0.26" \
+    "datasets>=3.0" \
+    "setfit>=1.1" \
+    "gliner>=0.2" \
+    "gliclass>=0.1" \
+    "Pillow" "pytesseract" "pdfplumber" "pandas" "psutil" \
+    "google-cloud-storage" "sentencepiece" "protobuf<6" \
+    "rapidfuzz" "pandera" "outlines" "instructor" "marvin" "dspy-ai" \
+    "einops" "timm" \
+    "easyocr" \
+    "python-doctr[torch]" \
+    "rank_bm25"
+
+RUN pip install \
+    "nougat-ocr" \
+    "marker-pdf" \
+    "docling" \
+    "colpali-engine" \
+    "spacy" \
+    "stanza" \
+    "guidance" \
+    "lmql" \
+    "jsonformer" \
+    "rank_bm25" || true
+RUN python -m spacy download nb_core_news_lg || true
+
+RUN pip install "surya-ocr" || true
+RUN pip install "FlagEmbedding" || true
 
 WORKDIR /app
-COPY models/shared.py /app/shared.py
-COPY models /app/models
-ENV PYTHONPATH=/app:/app/models
+COPY shared.py /app/shared.py
+COPY runners /app/runners
+ENV PYTHONPATH=/app
 
-ENTRYPOINT ["python"]
+ENTRYPOINT ["python", "-m"]

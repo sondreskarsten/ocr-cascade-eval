@@ -1,18 +1,15 @@
-import json, os, time, urllib.request, urllib.error
+import json, os, urllib.request, urllib.error
 from datetime import datetime, timezone
 from google.auth.transport.requests import Request as GAuthRequest
 from google.oauth2 import service_account
 from google.cloud import storage
 
-KEY = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS",
-                     "/secrets/sa.json")
+KEY = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "/secrets/sa.json")
 SPEC = json.loads(open("/app/jobs.json").read())
 COMMON = SPEC["common"]
 JOBS = SPEC["jobs"]
-PROJECT = COMMON["project"]
-REGION = COMMON["region"]
+PROJECT, REGION = COMMON["project"], COMMON["region"]
 PARENT = f"projects/{PROJECT}/locations/{REGION}"
-
 MAX_ATTEMPTS = 3
 BUCKET = "sondre_brreg_data"
 STATUS_PREFIX = "raw/ocr_eval_2026_05_05/supervisor"
@@ -60,13 +57,11 @@ def execution_state(execs):
                 return "ok"
             if state == "CONDITION_FAILED":
                 return f"failed:{reason or 'unknown'}"
-            return f"running"
     return "running"
 
 
-def has_result_in_gcs(model_short):
-    cli = storage.Client()
-    blob = cli.bucket(BUCKET).blob(f"raw/ocr_eval_2026_05_05/results/{model_short}.json")
+def has_result(runner_name):
+    blob = storage.Client().bucket(BUCKET).blob(f"raw/ocr_eval_2026_05_05/results/{runner_name}.json")
     return blob.exists()
 
 
@@ -74,33 +69,26 @@ def main():
     summary = {"checked_at": datetime.now(timezone.utc).isoformat(),
                "jobs": {}, "totals": {"ok": 0, "running": 0, "failed": 0,
                                        "retried": 0, "exhausted": 0, "no_runs": 0}}
-
     for j in JOBS:
-        job_name = j["name"]
-        model_short = job_name.replace("ocr-eval-", "").replace("-", "_")
-        execs = list_executions(job_name)
+        execs = list_executions(j["name"])
         state = execution_state(execs)
-        in_gcs = has_result_in_gcs(model_short)
-
-        info = {"state": state, "n_executions": len(execs), "result_in_gcs": in_gcs}
-
+        info = {"state": state, "n_executions": len(execs),
+                "runner": j["runner"], "result_in_gcs": has_result(j["runner"])}
         if "failed" in state and len(execs) < MAX_ATTEMPTS:
-            code, _ = trigger(job_name)
+            code, _ = trigger(j["name"])
             info["retry_triggered"] = code in (200, 202)
-            info["attempt_count_before_retry"] = len(execs)
             summary["totals"]["retried"] += 1
         elif "failed" in state:
             summary["totals"]["exhausted"] += 1
         elif state == "ok":
             summary["totals"]["ok"] += 1
         elif state == "no_runs":
-            summary["totals"]["no_runs"] += 1
-            code, _ = trigger(job_name)
+            code, _ = trigger(j["name"])
             info["initial_trigger"] = code in (200, 202)
+            summary["totals"]["no_runs"] += 1
         else:
             summary["totals"]["running"] += 1
-
-        summary["jobs"][job_name] = info
+        summary["jobs"][j["name"]] = info
 
     cli = storage.Client()
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -108,9 +96,7 @@ def main():
         json.dumps(summary, indent=2), content_type="application/json")
     cli.bucket(BUCKET).blob(f"{STATUS_PREFIX}/latest.json").upload_from_string(
         json.dumps(summary, indent=2), content_type="application/json")
-
     print(json.dumps(summary["totals"]))
-    return 0
 
 
 if __name__ == "__main__":
